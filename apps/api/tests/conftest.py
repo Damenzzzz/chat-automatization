@@ -1,16 +1,22 @@
 import asyncio
 import os
+import secrets
+import string
+import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from httpx import ASGITransport, AsyncClient, Response
 from redis.asyncio import Redis
 from sqlalchemy import make_url, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.auth.deps import get_code_sender
+from app.auth.identity import Identity
 from app.core.redis import get_redis
 
 OWNER_URL = make_url(
@@ -35,7 +41,7 @@ for key, value in {
     "S3_ACCESS_KEY": "test",
     "S3_SECRET_KEY": "test",
     "FERNET_KEY": "test",
-    "JWT_SECRET": "test",
+    "JWT_SECRET": "test-secret-for-pytest-only-0123456789",
 }.items():
     os.environ.setdefault(key, value)
 
@@ -79,3 +85,57 @@ async def redis() -> Redis:
     client = get_redis()
     await client.flushdb()
     return client
+
+
+class FakeSender:
+    def __init__(self) -> None:
+        self.codes: dict[str, str] = {}
+
+    async def send(self, identity: Identity, code: str) -> None:
+        self.codes[identity.value] = code
+
+
+@pytest.fixture
+def sender() -> FakeSender:
+    return FakeSender()
+
+
+@pytest.fixture
+async def client(database: None, redis: Redis, sender: FakeSender) -> AsyncIterator[AsyncClient]:
+    from app.main import create_app
+
+    app = create_app()
+    app.dependency_overrides[get_code_sender] = lambda: sender
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+
+
+def random_phone() -> str:
+    return "+7700" + "".join(secrets.choice(string.digits) for _ in range(7))
+
+
+async def create_user(
+    engine: AsyncEngine,
+    *,
+    role: str = "owner",
+    phone: str | None = None,
+    tenant_id: uuid.UUID | None = None,
+    tenant_name: str = "Тестовый магазин",
+) -> tuple[uuid.UUID, uuid.UUID, str]:
+    phone = phone or random_phone()
+    async with engine.begin() as conn:
+        if tenant_id is None:
+            tenant_id = await conn.scalar(
+                text("INSERT INTO tenants (name) VALUES (:n) RETURNING id"), {"n": tenant_name}
+            )
+        user_id = await conn.scalar(
+            text("INSERT INTO users (tenant_id, phone, role) VALUES (:t, :p, :r) RETURNING id"),
+            {"t": tenant_id, "p": phone, "r": role},
+        )
+    assert tenant_id is not None
+    return tenant_id, user_id, phone
+
+
+async def login(client: AsyncClient, sender: FakeSender, phone: str) -> Response:
+    await client.post("/auth/request-code", json={"phone": phone})
+    return await client.post("/auth/verify", json={"phone": phone, "code": sender.codes[phone]})

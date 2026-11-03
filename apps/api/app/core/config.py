@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     gemini_use_vertexai: bool = True
 
     fernet_key: SecretStr
-    jwt_secret: SecretStr
+    jwt_secret: SecretStr = Field(min_length=32)
 
     access_token_ttl: int = 15 * 60
     refresh_token_ttl: int = 30 * 24 * 3600
