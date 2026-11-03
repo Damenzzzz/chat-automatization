@@ -12,6 +12,7 @@ def test_health_shows_loaded_models(client: TestClient) -> None:
         "loaded": True,
         "dim": 1024,
     }
+    assert body["reranker"] == {"backend": "fake", "model": "fake-reranker", "loaded": True}
 
 
 def test_embed_contract(client: TestClient) -> None:

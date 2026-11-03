@@ -24,6 +24,16 @@ class EmbedOut(BaseModel):
     embeddings: list[list[float]]
 
 
+class RerankIn(BaseModel):
+    query: str = Field(min_length=1)
+    documents: list[str] = Field(min_length=1)
+
+
+class RerankOut(BaseModel):
+    model: str
+    scores: list[float]
+
+
 def _configure_logging(settings: Settings) -> None:
     logging.basicConfig(format="%(message)s", level=settings.log_level)
     structlog.configure(
@@ -80,6 +90,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise _not_ready(hub) from exc
         assert hub.embedder is not None  # noqa: S101
         return EmbedOut(model=hub.embedder.name, dim=hub.embedder.dim, embeddings=vectors)
+
+    @app.post("/rerank")
+    async def rerank(body: RerankIn, request: Request) -> RerankOut:
+        if len(body.documents) > settings.ml_rerank_max_docs:
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "too_many_documents")
+        texts = [body.query, *body.documents]
+        if any(len(t) > settings.ml_max_text_chars for t in texts):
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "text_too_long")
+        hub = _hub(request)
+        try:
+            scores = await hub.rerank(body.query, body.documents)
+        except NotReadyError as exc:
+            raise _not_ready(hub) from exc
+        assert hub.reranker is not None  # noqa: S101
+        return RerankOut(model=hub.reranker.name, scores=scores)
 
     return app
 
