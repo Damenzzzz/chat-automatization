@@ -31,5 +31,6 @@ next-env.d.ts
 npm-debug.log*
 
 # ML model caches
-models/
+/models/
+apps/ml/.models/
 .cache/
