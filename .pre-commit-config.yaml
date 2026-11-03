@@ -1,0 +1,50 @@
+# Установка: make install (или uvx pre-commit install)
+# SPEC.md — исходный документ продукта, хуки его не трогают.
+exclude: ^SPEC\.md$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy-api
+        name: mypy (api)
+        entry: bash -c 'cd apps/api && uv run mypy'
+        language: system
+        files: ^apps/api/.*\.py$
+        pass_filenames: false
+      - id: mypy-ml
+        name: mypy (ml)
+        entry: bash -c 'cd apps/ml && uv run mypy'
+        language: system
+        files: ^apps/ml/.*\.py$
+        pass_filenames: false
+      - id: eslint-web
+        name: eslint (web)
+        entry: bash -c 'cd apps/web && npm run -s lint'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx|js|mjs)$
+        pass_filenames: false
+      - id: prettier-web
+        name: prettier (web)
+        entry: bash -c 'cd apps/web && npm run -s format:check'
+        language: system
+        files: ^apps/web/
+        pass_filenames: false
