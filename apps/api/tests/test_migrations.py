@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.db.base import Base
+from app.db.session import get_engine, get_sessionmaker
 from tests.conftest import OWNER_URL, alembic_config
 
 
@@ -29,6 +30,8 @@ def test_upgrade_downgrade_roundtrip(database: None) -> None:
 
     command.upgrade(cfg, "head")
     assert asyncio.run(_public_tables()) == expected
+    get_engine.cache_clear()
+    get_sessionmaker.cache_clear()
 
 
 def test_models_match_migrations(database: None) -> None:

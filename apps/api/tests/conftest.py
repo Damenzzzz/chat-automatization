@@ -113,7 +113,7 @@ class RecordingQueue:
     def __init__(self) -> None:
         self.jobs: list[tuple[str, tuple[object, ...]]] = []
 
-    async def enqueue(self, function: str, *args: object) -> None:
+    async def enqueue(self, function: str, *args: object, job_id: str | None = None) -> None:
         self.jobs.append((function, args))
 
 

@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.queue import get_queue
 from app.db.session import tenant_session
 from app.models import BotProfile, KbChunk, Product, Tenant
 
@@ -100,6 +101,9 @@ async def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level, json=settings.env == "prod")
     result = await seed_demo()
+    await get_queue().enqueue(
+        "reindex_embeddings", str(result.tenant_id), job_id=f"reindex:{result.tenant_id}"
+    )
     log.info(
         "seed.done",
         tenant_id=str(result.tenant_id),

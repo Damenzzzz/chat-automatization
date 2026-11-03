@@ -8,7 +8,7 @@ from app.core.config import get_settings
 
 
 class Queue(Protocol):
-    async def enqueue(self, function: str, *args: Any) -> None: ...
+    async def enqueue(self, function: str, *args: Any, job_id: str | None = None) -> None: ...
 
 
 class ArqQueue:
@@ -16,10 +16,10 @@ class ArqQueue:
         self.redis_url = redis_url
         self._pool: ArqRedis | None = None
 
-    async def enqueue(self, function: str, *args: Any) -> None:
+    async def enqueue(self, function: str, *args: Any, job_id: str | None = None) -> None:
         if self._pool is None:
             self._pool = await create_pool(RedisSettings.from_dsn(self.redis_url))
-        await self._pool.enqueue_job(function, *args)
+        await self._pool.enqueue_job(function, *args, _job_id=job_id)
 
 
 @lru_cache
