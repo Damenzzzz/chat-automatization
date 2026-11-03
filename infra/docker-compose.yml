@@ -85,7 +85,7 @@ services:
     environment: *python-env
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${API_PORT:-8100}:8000"
     volumes:
       - ../apps/api:/app
     depends_on:
@@ -134,7 +134,7 @@ services:
       context: ../apps/web
       target: dev
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
+      NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8100}
     ports:
       - "${WEB_PORT:-3000}:3000"
     volumes:
