@@ -2,10 +2,12 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.llm.gemini import GeminiLLM
+from app.llm.pricing import MODEL_PRICES, cost_usd
 from app.llm.types import LLM, LLMError, LLMResponse, Message, Tool, ToolCall, Usage
 
 __all__ = [
     "LLM",
+    "MODEL_PRICES",
     "GeminiLLM",
     "LLMError",
     "LLMResponse",
@@ -13,6 +15,7 @@ __all__ = [
     "Tool",
     "ToolCall",
     "Usage",
+    "cost_usd",
     "get_llm",
 ]
 

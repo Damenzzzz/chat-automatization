@@ -12,11 +12,19 @@ from google.genai import types as gt
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
+from app.llm.pricing import UnknownModelError, cost_usd
 from app.llm.types import LLMError, LLMResponse, Message, Tool, ToolCall, Usage
 
 log = structlog.get_logger()
 
 Sleep = Callable[[float], Awaitable[None]]
+
+
+def _cost(model: str, usage: Usage) -> object:
+    try:
+        return cost_usd(model, usage)
+    except UnknownModelError:
+        return None
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -158,6 +166,7 @@ class GeminiLLM:
                 output_tokens=result.usage.output_tokens,
                 cached_tokens=result.usage.cached_tokens,
                 tool_calls=len(result.tool_calls),
+                cost_usd=str(_cost(model, result.usage)),
             )
             return result
         raise AssertionError("unreachable")
