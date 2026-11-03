@@ -9,6 +9,8 @@ from sqlalchemy import select
 
 from app.auth.deps import Principal, TenantDb, require_role
 from app.catalog.gsheet import SheetError, download_csv, parse_sheet_url
+from app.catalog.mapping import MappingProposal, heuristic_mapping
+from app.catalog.reader import FileFormatError, preview
 from app.core.config import get_settings
 from app.core.http import get_http_client
 from app.core.storage import Storage, get_storage
@@ -74,6 +76,22 @@ async def get_source(db: TenantDb, source_id: uuid.UUID) -> CatalogSource:
     if source is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "source_not_found")
     return source
+
+
+async def get_job(db: TenantDb, job_id: uuid.UUID) -> IngestJob:
+    job = await db.scalar(select(IngestJob).where(IngestJob.id == job_id))
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "job_not_found")
+    return job
+
+
+async def load_preview(job: IngestJob, storage: Storage) -> tuple[list[str], list[list[object]]]:
+    if not job.file_key or not job.file_type:
+        raise HTTPException(status.HTTP_409_CONFLICT, "job_has_no_file")
+    try:
+        return preview(await storage.get(job.file_key), job.file_type)
+    except FileFormatError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.post("/uploads", status_code=status.HTTP_201_CREATED)
@@ -162,3 +180,16 @@ async def upload_gsheet(
         source=source,
     )
     return UploadOut(id=job.id, source_id=source.id, status=job.status, file_name=job.file_name)
+
+
+@router.get("/uploads/{job_id}/mapping")
+async def get_mapping(
+    job_id: uuid.UUID,
+    principal: Editor,
+    db: TenantDb,
+    storage: Annotated[Storage, Depends(get_storage)],
+) -> MappingProposal:
+    job = await get_job(db, job_id)
+    source = await get_source(db, job.source_id)
+    headers, rows = await load_preview(job, storage)
+    return heuristic_mapping(headers, rows, source.column_map)
