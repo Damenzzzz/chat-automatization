@@ -23,6 +23,11 @@ class Settings(BaseSettings):
 
     gemini_api_key: SecretStr | None = None
     gemini_use_vertexai: bool = True
+    llm_model_router: str = "gemini-3.1-flash-lite"
+    llm_model_reply: str = "gemini-3.5-flash-lite"
+    llm_model_complex: str = "gemini-3.6-flash"
+    llm_timeout: float = 30.0
+    llm_max_retries: int = 3
 
     fernet_key: SecretStr
     jwt_secret: SecretStr = Field(min_length=32)
