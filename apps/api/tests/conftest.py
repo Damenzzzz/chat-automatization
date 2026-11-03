@@ -1,6 +1,5 @@
 import os
 
-# Тестовые значения задаются до импорта приложения; реальные секреты в тестах не нужны.
 _TEST_ENV = {
     "ENV": "test",
     "DATABASE_URL": "postgresql+asyncpg://satushy:satushy@localhost:5432/satushy_test",

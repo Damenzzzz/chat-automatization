@@ -6,7 +6,6 @@ import prettier from "eslint-config-prettier/flat";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Форматирование — забота prettier, отключаем конфликтующие правила eslint.
   prettier,
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);

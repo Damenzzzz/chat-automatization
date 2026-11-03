@@ -3,7 +3,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Разработка: next dev с hot-reload (исходники монтируются из docker-compose).
 FROM deps AS dev
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
@@ -15,7 +14,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
 RUN npm run build
 
-# Прод: минимальный образ на standalone-выводе Next.js.
 FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000

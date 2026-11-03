@@ -1,5 +1,3 @@
-"""Настройки приложения. Все значения — только из переменных окружения (или .env)."""
-
 from functools import lru_cache
 from typing import Literal
 

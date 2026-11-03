@@ -1,6 +1,3 @@
-"""ML-сервис: эмбеддинги (Qwen3-Embedding-0.6B), реранкер (Qwen3-Reranker-0.6B),
-голос → текст (faster-whisper). Пока только /health — модели подключаются позже."""
-
 import logging
 
 import structlog

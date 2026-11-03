@@ -1,7 +1,6 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-# .env.example — dev-значения по умолчанию, .env (если есть) — поверх них.
 ENV_FILES := --env-file .env.example $(if $(wildcard .env),--env-file .env)
 COMPOSE := docker compose -f infra/docker-compose.yml $(ENV_FILES)
 

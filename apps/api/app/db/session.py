@@ -22,6 +22,5 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI-зависимость: одна сессия на запрос."""
     async with get_sessionmaker()() as session:
         yield session

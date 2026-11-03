@@ -1,5 +1,3 @@
-# Установка: make install (или uvx pre-commit install)
-# SPEC.md — исходный документ продукта, хуки его не трогают.
 exclude: ^SPEC\.md$
 
 repos:

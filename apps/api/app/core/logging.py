@@ -4,7 +4,6 @@ import structlog
 
 
 def configure_logging(level: str = "INFO", *, json: bool = False) -> None:
-    """Единая настройка structlog: консоль в dev, JSON в prod."""
     logging.basicConfig(format="%(message)s", level=level)
     renderer: structlog.types.Processor = (
         structlog.processors.JSONRenderer() if json else structlog.dev.ConsoleRenderer()

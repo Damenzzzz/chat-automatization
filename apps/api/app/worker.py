@@ -1,5 +1,3 @@
-"""ARQ-воркер. Запуск: arq app.worker.WorkerSettings"""
-
 from typing import Any, ClassVar
 
 from arq.connections import RedisSettings
@@ -12,7 +10,6 @@ configure_logging(_settings.log_level, json=_settings.env == "prod")
 
 
 async def ping(ctx: dict[str, Any]) -> str:
-    """Служебная задача: проверка, что воркер жив. ARQ требует хотя бы одну функцию."""
     return "pong"
 
 

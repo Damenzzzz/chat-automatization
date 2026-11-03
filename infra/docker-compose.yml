@@ -1,15 +1,12 @@
-# Окружение для разработки. Запуск из корня: make up
-# Хост-порты переопределяются переменными *_PORT в .env (см. .env.example).
 name: satushy
 
 x-env: &app-env
   env_file:
-    - path: ../.env.example # безопасные dev-значения по умолчанию
-    - path: ../.env # ваши локальные значения и ключи (не коммитится)
+    - path: ../.env.example
+    - path: ../.env
       required: false
 
 x-python-env: &python-env
-  # Адреса внутри docker-сети важнее значений из .env (там — localhost для запуска с хоста).
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-satushy}:${POSTGRES_PASSWORD:-satushy}@postgres:5432/${POSTGRES_DB:-satushy}
   REDIS_URL: redis://redis:6379/0
   S3_ENDPOINT_URL: http://minio:9000
@@ -45,7 +42,6 @@ services:
       timeout: 3s
       retries: 20
 
-  # Официальные образы minio/minio больше не публикуются; Chainguard собирает MinIO из исходников.
   minio:
     image: cgr.dev/chainguard/minio:latest
     command: ["server", "/data", "--console-address", ":9001"]

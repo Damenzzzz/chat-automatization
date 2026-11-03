@@ -1,5 +1,3 @@
-"""Настройки ML-сервиса — только из переменных окружения."""
-
 from functools import lru_cache
 from typing import Literal
 

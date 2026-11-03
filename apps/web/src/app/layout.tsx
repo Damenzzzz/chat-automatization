@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 
 import "./globals.css";
 
-// cyrillic-ext нужен для казахских букв (ә, ғ, қ, ң, ө, ұ, ү, һ, і).
 const geist = Geist({
   subsets: ["latin", "cyrillic", "cyrillic-ext"],
   variable: "--font-sans",
