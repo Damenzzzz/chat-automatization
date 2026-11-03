@@ -157,3 +157,13 @@ def heuristic_mapping(
         "saved" if saved and all(h in saved for h in headers) else "heuristic"
     )
     return MappingProposal(columns=columns, method=method)
+
+
+def validate_mapping(headers: list[str], mapping: dict[str, str | None]) -> list[str]:
+    problems = [f"нет колонки «{c}»" for c in mapping if c not in headers]
+    problems += [f"неизвестное поле «{f}»" for f in mapping.values() if not is_valid_field(f)]
+    used = [f for f in mapping.values() if f in BASE_FIELDS]
+    problems += [f"поле {f} назначено нескольким колонкам" for f in set(used) if used.count(f) > 1]
+    if "name" not in used:
+        problems.append("нужна колонка с названием товара (name)")
+    return problems

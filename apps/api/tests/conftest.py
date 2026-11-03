@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from app.auth.deps import get_code_sender
 from app.auth.identity import Identity
+from app.core.queue import get_queue
 from app.core.redis import get_redis
 from app.core.storage import MemoryStorage, get_storage
 from app.llm import get_llm
@@ -108,14 +109,28 @@ def storage() -> MemoryStorage:
     return MemoryStorage()
 
 
+class RecordingQueue:
+    def __init__(self) -> None:
+        self.jobs: list[tuple[str, tuple[object, ...]]] = []
+
+    async def enqueue(self, function: str, *args: object) -> None:
+        self.jobs.append((function, args))
+
+
 @pytest.fixture
-def app(sender: FakeSender, storage: MemoryStorage) -> FastAPI:
+def queue() -> RecordingQueue:
+    return RecordingQueue()
+
+
+@pytest.fixture
+def app(sender: FakeSender, storage: MemoryStorage, queue: RecordingQueue) -> FastAPI:
     from app.main import create_app
 
     application = create_app()
     application.dependency_overrides[get_code_sender] = lambda: sender
     application.dependency_overrides[get_storage] = lambda: storage
     application.dependency_overrides[get_llm] = lambda: None
+    application.dependency_overrides[get_queue] = lambda: queue
     return application
 
 

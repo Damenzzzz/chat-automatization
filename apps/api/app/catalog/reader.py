@@ -22,26 +22,30 @@ def _decode(data: bytes) -> str:
     raise FileFormatError("unknown_encoding")
 
 
-def _csv_rows(data: bytes) -> Iterator[Row]:
+def _csv_rows(data: bytes) -> tuple[Iterator[Row], int]:
     text = _decode(data)
     try:
         dialect: Any = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
     except csv.Error:
         dialect = csv.excel
-    yield from csv.reader(io.StringIO(text), dialect)
+    return csv.reader(io.StringIO(text), dialect), text.count("\n") + 1
 
 
-def _xlsx_rows(data: bytes) -> Iterator[Row]:
+def _xlsx_rows(data: bytes) -> tuple[Iterator[Row], int | None]:
     try:
         wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     except Exception as exc:
         raise FileFormatError("bad_xlsx") from exc
-    try:
-        ws = wb.worksheets[0]
-        for row in ws.iter_rows(values_only=True):
-            yield list(row)
-    finally:
-        wb.close()
+    ws = wb.worksheets[0]
+
+    def rows() -> Iterator[Row]:
+        try:
+            for row in ws.iter_rows(values_only=True):
+                yield list(row)
+        finally:
+            wb.close()
+
+    return rows(), ws.max_row
 
 
 def is_empty(row: Row) -> bool:
@@ -63,6 +67,7 @@ class Table:
     headers: list[str]
     header_row: int
     rows: Iterator[tuple[int, Row]]
+    total_rows: int | None = None
 
 
 def _pad(rows: Iterator[tuple[int, Row]], width: int) -> Iterator[tuple[int, Row]]:
@@ -71,12 +76,13 @@ def _pad(rows: Iterator[tuple[int, Row]], width: int) -> Iterator[tuple[int, Row
 
 
 def open_table(data: bytes, file_type: str) -> Table:
-    source = _xlsx_rows(data) if file_type == "xlsx" else _csv_rows(data)
+    source, max_row = _xlsx_rows(data) if file_type == "xlsx" else _csv_rows(data)
     numbered = enumerate(source, start=1)
     for number, row in numbered:
         if not is_empty(row):
             headers = unique_headers(row)
-            return Table(headers=headers, header_row=number, rows=_pad(numbered, len(headers)))
+            total = max(max_row - number, 0) if max_row else None
+            return Table(headers, number, _pad(numbered, len(headers)), total)
     raise FileFormatError("no_header")
 
 

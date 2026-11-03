@@ -4,17 +4,27 @@ from typing import Annotated
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.auth.deps import Principal, TenantDb, require_role
 from app.catalog.gsheet import SheetError, download_csv, parse_sheet_url
-from app.catalog.mapping import MappingProposal, heuristic_mapping
+from app.catalog.mapping import MappingProposal, heuristic_mapping, validate_mapping
 from app.catalog.mapping_llm import refine_with_llm
 from app.catalog.reader import FileFormatError, preview
 from app.core.config import get_settings
 from app.core.http import get_http_client
+from app.core.queue import Queue, get_queue
 from app.core.storage import Storage, get_storage
 from app.llm import LLM, LLMError, get_llm
 from app.models import CatalogSource, IngestJob
@@ -205,3 +215,37 @@ async def get_mapping(
     except LLMError as exc:
         log.warning("catalog.mapping.llm_failed", job_id=str(job_id), error=str(exc))
         return proposal
+
+
+class ConfirmIn(BaseModel):
+    mapping: dict[str, str | None]
+
+
+class ConfirmOut(BaseModel):
+    id: uuid.UUID
+    status: str
+
+
+@router.post("/uploads/{job_id}/confirm", status_code=status.HTTP_202_ACCEPTED)
+async def confirm(
+    job_id: uuid.UUID,
+    body: ConfirmIn,
+    principal: Editor,
+    db: TenantDb,
+    storage: Annotated[Storage, Depends(get_storage)],
+    queue: Annotated[Queue, Depends(get_queue)],
+    background: BackgroundTasks,
+) -> ConfirmOut:
+    job = await get_job(db, job_id)
+    if job.status in ("queued", "running"):
+        raise HTTPException(status.HTTP_409_CONFLICT, "job_in_progress")
+    headers, _ = await load_preview(job, storage)
+    problems = validate_mapping(headers, body.mapping)
+    if problems:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, problems)
+
+    source = await get_source(db, job.source_id)
+    source.column_map = body.mapping
+    job.status = "queued"
+    background.add_task(queue.enqueue, "ingest_catalog", str(principal.tenant_id), str(job.id))
+    return ConfirmOut(id=job.id, status=job.status)

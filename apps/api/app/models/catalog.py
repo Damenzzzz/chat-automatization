@@ -80,6 +80,13 @@ class Product(IdMixin, TimestampMixin, TenantMixin, Base):
         CheckConstraint("price >= 0", name="price"),
         CheckConstraint("stock >= 0", name="stock"),
         UniqueConstraint("tenant_id", "sku_norm"),
+        Index(
+            "uq_products_tenant_id_name_hash",
+            "tenant_id",
+            "name_hash",
+            unique=True,
+            postgresql_where=sql_text("sku_norm IS NULL"),
+        ),
         Index("ix_products_tenant_id_price", "tenant_id", "price"),
         Index("ix_products_tenant_id_stock", "tenant_id", "stock"),
         Index("ix_products_tsv", "tsv", postgresql_using="gin"),
@@ -109,6 +116,7 @@ class Product(IdMixin, TimestampMixin, TenantMixin, Base):
     sku: Mapped[str | None] = mapped_column(String(100))
     sku_norm: Mapped[str | None] = mapped_column(String(100), Computed(SKU_NORM, persisted=True))
     name: Mapped[str] = mapped_column(String(500))
+    name_hash: Mapped[str | None] = mapped_column(String(64))
     description: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(200))
     attributes: Mapped[dict[str, Any]] = mapped_column(
