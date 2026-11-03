@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from redis.asyncio import Redis
 from sqlalchemy import make_url, text
@@ -107,14 +108,17 @@ def storage() -> MemoryStorage:
 
 
 @pytest.fixture
-async def client(
-    database: None, redis: Redis, sender: FakeSender, storage: MemoryStorage
-) -> AsyncIterator[AsyncClient]:
+def app(sender: FakeSender, storage: MemoryStorage) -> FastAPI:
     from app.main import create_app
 
-    app = create_app()
-    app.dependency_overrides[get_code_sender] = lambda: sender
-    app.dependency_overrides[get_storage] = lambda: storage
+    application = create_app()
+    application.dependency_overrides[get_code_sender] = lambda: sender
+    application.dependency_overrides[get_storage] = lambda: storage
+    return application
+
+
+@pytest.fixture
+async def client(database: None, redis: Redis, app: FastAPI) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 

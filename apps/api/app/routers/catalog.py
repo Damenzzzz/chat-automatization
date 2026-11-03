@@ -2,12 +2,15 @@ import uuid
 from pathlib import PurePath
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.auth.deps import Principal, TenantDb, require_role
+from app.catalog.gsheet import SheetError, download_csv, parse_sheet_url
 from app.core.config import get_settings
+from app.core.http import get_http_client
 from app.core.storage import Storage, get_storage
 from app.models import CatalogSource, IngestJob
 
@@ -105,6 +108,57 @@ async def upload(
         file_name=file_name,
         file_type=file_type,
         content_type=content_type,
+        source=source,
+    )
+    return UploadOut(id=job.id, source_id=source.id, status=job.status, file_name=job.file_name)
+
+
+class SheetIn(BaseModel):
+    url: str = Field(max_length=2000)
+    source_id: uuid.UUID | None = None
+
+
+@router.post("/uploads/gsheet", status_code=status.HTTP_201_CREATED)
+async def upload_gsheet(
+    body: SheetIn,
+    principal: Editor,
+    db: TenantDb,
+    storage: Annotated[Storage, Depends(get_storage)],
+    http: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+) -> UploadOut:
+    try:
+        ref = parse_sheet_url(body.url)
+        data = await download_csv(http, ref, get_settings().catalog_max_upload_bytes)
+    except SheetError as exc:
+        code = str(exc)
+        status_code = (
+            status.HTTP_413_CONTENT_TOO_LARGE
+            if code == "file_too_large"
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code, code) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "sheet_download_failed") from exc
+
+    config = {"url": body.url, "sheet_id": ref.sheet_id, "gid": ref.gid}
+    if body.source_id is not None:
+        source = await get_source(db, body.source_id)
+        source.config = config
+    else:
+        source = CatalogSource(
+            tenant_id=principal.tenant_id, type="gsheet", name="Google Таблица", config=config
+        )
+        db.add(source)
+        await db.flush()
+
+    job = await create_job(
+        db,
+        storage,
+        principal,
+        data=data,
+        file_name=f"gsheet-{ref.sheet_id[:8]}-{ref.gid}.csv",
+        file_type="csv",
+        content_type="text/csv",
         source=source,
     )
     return UploadOut(id=job.id, source_id=source.id, status=job.status, file_name=job.file_name)
