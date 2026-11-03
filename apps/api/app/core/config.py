@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     ml_url: str = "http://localhost:8001"
 
+    catalog_max_upload_bytes: int = 20 * 1024 * 1024
+    catalog_max_rows: int = 50_000
+
     @property
     def cookie_secure(self) -> bool:
         return self.env == "prod"

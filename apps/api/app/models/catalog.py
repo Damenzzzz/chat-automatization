@@ -53,14 +53,21 @@ class CatalogSource(IdMixin, TimestampMixin, TenantMixin, Base):
 class IngestJob(IdMixin, TimestampMixin, TenantMixin, Base):
     __tablename__ = "ingest_jobs"
     __table_args__ = (
-        CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="status"),
+        CheckConstraint(
+            "status IN ('pending', 'queued', 'running', 'done', 'failed')", name="status"
+        ),
+        CheckConstraint("file_type IN ('xlsx', 'csv')", name="file_type"),
     )
 
     source_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("catalog_sources.id", ondelete="CASCADE"), index=True
     )
-    status: Mapped[str] = mapped_column(String(16), server_default="queued")
+    status: Mapped[str] = mapped_column(String(16), server_default="pending")
     file_key: Mapped[str | None] = mapped_column(String(500))
+    file_name: Mapped[str | None] = mapped_column(String(255))
+    file_type: Mapped[str | None] = mapped_column(String(8))
+    rows_total: Mapped[int | None] = mapped_column(Integer)
+    rows_done: Mapped[int] = mapped_column(Integer, server_default="0")
     stats: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=sql_text("'{}'::jsonb"))
     errors: Mapped[list[Any]] = mapped_column(JSONB, server_default=sql_text("'[]'::jsonb"))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

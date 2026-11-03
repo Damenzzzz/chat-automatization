@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 from app.auth.deps import get_code_sender
 from app.auth.identity import Identity
 from app.core.redis import get_redis
+from app.core.storage import MemoryStorage, get_storage
 
 OWNER_URL = make_url(
     os.environ.get(
@@ -101,11 +102,19 @@ def sender() -> FakeSender:
 
 
 @pytest.fixture
-async def client(database: None, redis: Redis, sender: FakeSender) -> AsyncIterator[AsyncClient]:
+def storage() -> MemoryStorage:
+    return MemoryStorage()
+
+
+@pytest.fixture
+async def client(
+    database: None, redis: Redis, sender: FakeSender, storage: MemoryStorage
+) -> AsyncIterator[AsyncClient]:
     from app.main import create_app
 
     app = create_app()
     app.dependency_overrides[get_code_sender] = lambda: sender
+    app.dependency_overrides[get_storage] = lambda: storage
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
@@ -139,3 +148,10 @@ async def create_user(
 async def login(client: AsyncClient, sender: FakeSender, phone: str) -> Response:
     await client.post("/auth/request-code", json={"phone": phone})
     return await client.post("/auth/verify", json={"phone": phone, "code": sender.codes[phone]})
+
+
+@pytest.fixture
+async def owner(client: AsyncClient, sender: FakeSender, owner_engine: AsyncEngine) -> uuid.UUID:
+    tenant_id, _, phone = await create_user(owner_engine)
+    await login(client, sender, phone)
+    return tenant_id
