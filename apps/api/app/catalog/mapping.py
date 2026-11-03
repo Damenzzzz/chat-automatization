@@ -120,6 +120,21 @@ def _samples(rows: list[list[Any]], index: int) -> list[str]:
     return [str(r[index]) for r in rows if index < len(r) and r[index] not in (None, "")][:5]
 
 
+def enforce_unique(columns: list[ColumnMapping]) -> list[ColumnMapping]:
+    best: dict[str, tuple[float, int]] = {}
+    for i, col in enumerate(columns):
+        if col.field in BASE_FIELDS and col.confidence > best.get(col.field, (-1.0, -1))[0]:
+            best[col.field] = (col.confidence, i)
+    result = []
+    for i, col in enumerate(columns):
+        if col.field in BASE_FIELDS and best[col.field][1] != i:
+            col = col.model_copy(
+                update={"field": ATTRIBUTE_PREFIX + normalize_header(col.column), "confidence": 0.3}
+            )
+        result.append(col)
+    return result
+
+
 def heuristic_mapping(
     headers: list[str], rows: list[list[Any]], saved: dict[str, Any] | None = None
 ) -> MappingProposal:
@@ -132,20 +147,12 @@ def heuristic_mapping(
             field, confidence = _guess(header)
             guesses.append((header, field, confidence, i))
 
-    best: dict[str, tuple[float, int]] = {}
-    for _, field, confidence, i in guesses:
-        if field in BASE_FIELDS and confidence > best.get(field, (-1.0, -1))[0]:
-            best[field] = (confidence, i)
-
-    columns = []
-    for header, field, confidence, i in guesses:
-        if field in BASE_FIELDS and best[field][1] != i:
-            field, confidence = ATTRIBUTE_PREFIX + normalize_header(header), 0.3
-        columns.append(
-            ColumnMapping(
-                column=header, field=field, confidence=confidence, samples=_samples(rows, i)
-            )
-        )
+    columns = enforce_unique(
+        [
+            ColumnMapping(column=h, field=f, confidence=c, samples=_samples(rows, i))
+            for h, f, c, i in guesses
+        ]
+    )
     method: Literal["heuristic", "saved"] = (
         "saved" if saved and all(h in saved for h in headers) else "heuristic"
     )

@@ -20,6 +20,7 @@ from app.auth.deps import get_code_sender
 from app.auth.identity import Identity
 from app.core.redis import get_redis
 from app.core.storage import MemoryStorage, get_storage
+from app.llm import get_llm
 
 OWNER_URL = make_url(
     os.environ.get(
@@ -114,6 +115,7 @@ def app(sender: FakeSender, storage: MemoryStorage) -> FastAPI:
     application = create_app()
     application.dependency_overrides[get_code_sender] = lambda: sender
     application.dependency_overrides[get_storage] = lambda: storage
+    application.dependency_overrides[get_llm] = lambda: None
     return application
 
 
