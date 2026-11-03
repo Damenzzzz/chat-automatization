@@ -64,6 +64,15 @@ make down
 `POST /catalog/uploads` (xlsx/csv ≤ 20 МБ) или `/catalog/uploads/gsheet` → файл в S3, задача `pending` → `GET /catalog/uploads/{id}/mapping` (эвристика → LLM → сохранённый маппинг источника) → `POST /catalog/uploads/{id}/confirm` → ARQ `ingest_catalog` → `GET /ingest-jobs/{id}`.
 Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash`. `embedding_stale = true` только при смене статичного текста (`content_hash`: name, description, category, attributes); цена и остаток эмбеддинг не трогают.
 
+## ML-сервис и эмбеддинги
+
+- `apps/ml`: `POST /embed {texts, kind: query|document}` → нормализованные векторы 1024; `POST /rerank {query, documents}` → оценки 0..1; `GET /health` — статус загрузки и модели. Модели грузятся в фоне при старте, до готовности `/embed` и `/rerank` отвечают 503 (клиент API ретраит).
+- Бэкенды через env: `ML_EMBEDDER` / `ML_RERANKER` = `qwen3` (по умолчанию) | `bge-m3` | `fake` (без моделей, для разработки и CI). Кэш Hugging Face — volume `ml-models` (`HF_HOME=/models`), первый старт качает ~2,4 ГБ.
+- На CPU модели грузятся в float32 (`ML_DTYPE=auto`; bf16 на CPU в разы медленнее). Qwen3 эмбеддер + реранкер занимают ~5,5 ГБ RAM — Docker Desktop нужно ≥ 10 ГБ памяти, иначе `ML_EMBEDDER=fake ML_RERANKER=fake` или `ML_DTYPE=bfloat16`.
+- Тесты на настоящих моделях: `ML_REAL_MODELS=1` (в CI пропускаются); гонять в отдельном контейнере при остановленном `ml`, иначе не хватит памяти.
+- В API: `app.mlclient.get_ml_client()`; батчи по 64, ретраи на 429/5xx/сетевые ошибки.
+- `reindex_embeddings(tenant_id)` (ARQ) эмбеддит products и kb_chunks с `embedding_stale` или без вектора и снимает флаг, только если строку не меняли во время расчёта (проверка `updated_at`). Ставится после импорта каталога и `make seed`, плюс cron `reindex_all` раз в 10 минут. Текст товара — `app/catalog/embedding_text.py`: без цены и остатка.
+
 ## Модели
 
 | Задача | Модель | Где |
