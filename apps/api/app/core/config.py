@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
 
     ml_url: str = "http://localhost:8001"
+    ml_timeout: float = 120.0
+    ml_max_retries: int = 3
 
     catalog_max_upload_bytes: int = 20 * 1024 * 1024
     catalog_max_rows: int = 50_000
