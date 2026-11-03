@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.routers import admin, auth, catalog, me, team
+from app.routers import admin, auth, catalog, ingest_jobs, me, team
 
 
 def create_app() -> FastAPI:
@@ -20,6 +20,7 @@ def create_app() -> FastAPI:
     app.include_router(team.router)
     app.include_router(admin.router)
     app.include_router(catalog.router)
+    app.include_router(ingest_jobs.router)
     return app
 
 
