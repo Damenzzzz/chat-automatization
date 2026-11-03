@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.cookies import (
     REFRESH_COOKIE,
@@ -22,7 +23,7 @@ from app.auth.otp import (
 )
 from app.auth.senders import CodeSender, SenderUnavailableError
 from app.auth.tokens import AccessClaims, RefreshStore, create_access_token
-from app.auth.users import UserRef, find_user, load_user
+from app.auth.users import UserRef, create_owner, find_user, load_user
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -40,8 +41,15 @@ def _otp_http_error(exc: OtpError) -> HTTPException:
     return HTTPException(code, detail)
 
 
+class SignupIn(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    city: str | None = Field(default=None, max_length=100)
+    niche: str | None = Field(default=None, max_length=100)
+
+
 class VerifyIn(IdentityIn):
     code: str = Field(pattern=r"^\d{6}$")
+    signup: SignupIn | None = None
 
 
 class SessionOut(BaseModel):
@@ -85,13 +93,21 @@ async def verify(
 ) -> SessionOut:
     identity = body.identity
     user = await find_user(identity)
+    signup = body.signup if user is None else None
     try:
-        await otp.verify(identity, body.code, consume=user is not None)
+        await otp.verify(identity, body.code, consume=user is not None or signup is not None)
     except OtpError as exc:
         raise _otp_http_error(exc) from exc
 
     if user is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "signup_required")
+        if signup is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "signup_required")
+        try:
+            user = await create_owner(
+                identity, name=signup.name, city=signup.city, niche=signup.niche
+            )
+        except IntegrityError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, "already_registered") from exc
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "user_disabled")
     return await _start_session(response, user, store)
