@@ -17,6 +17,18 @@ jobs:
       fail-fast: false
       matrix:
         app: [api, ml]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: satushy
+          POSTGRES_PASSWORD: satushy
+          POSTGRES_DB: satushy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U satushy" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_OWNER_URL: postgresql+asyncpg://satushy:satushy@localhost:5432/satushy_test
     defaults:
       run:
         working-directory: apps/${{ matrix.app }}

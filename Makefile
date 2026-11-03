@@ -34,7 +34,7 @@ ps: ## Статус сервисов
 migrate: ## Применить миграции Alembic (нужен make up)
 	$(COMPOSE) exec api alembic upgrade head
 
-test: ## Тесты api и ml
+test: ## Тесты api (нужен make up — postgres) и ml
 	$(API) uv run pytest
 	$(ML) uv run pytest
 

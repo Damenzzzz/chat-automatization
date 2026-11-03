@@ -7,7 +7,8 @@ x-env: &app-env
       required: false
 
 x-python-env: &python-env
-  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-satushy}:${POSTGRES_PASSWORD:-satushy}@postgres:5432/${POSTGRES_DB:-satushy}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_APP_USER:-satushy_app}:${POSTGRES_APP_PASSWORD:-satushy_app}@postgres:5432/${POSTGRES_DB:-satushy}
+  DATABASE_OWNER_URL: postgresql+asyncpg://${POSTGRES_USER:-satushy}:${POSTGRES_PASSWORD:-satushy}@postgres:5432/${POSTGRES_DB:-satushy}
   REDIS_URL: redis://redis:6379/0
   S3_ENDPOINT_URL: http://minio:9000
   ML_URL: http://ml:8001
@@ -19,10 +20,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-satushy}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-satushy}
       POSTGRES_DB: ${POSTGRES_DB:-satushy}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-satushy_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-satushy_app}
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

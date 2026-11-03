@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     database_url: str
+    database_owner_url: str
     redis_url: str
 
     s3_endpoint_url: str
