@@ -25,7 +25,8 @@ cp .env.example .env    # затем вписать GEMINI_API_KEY и т. п.
 make install            # uv sync, npm ci, pre-commit install
 make up                 # все сервисы, ждёт healthcheck
 make migrate            # alembic upgrade head внутри контейнера api
-make test               # pytest api + ml
+make seed               # демо-магазин «Цветы Пион»: 30 товаров и база знаний
+make test               # pytest api + ml; тесты api пересоздают базу satushy_test в docker-postgres
 make lint               # ruff, mypy, eslint, prettier, tsc
 make fmt                # автоформат
 make down
@@ -35,7 +36,9 @@ make down
 
 ## Правила
 
-- **Мультиарендность:** у каждой таблицы есть `tenant_id` и политика RLS. Без исключений.
+- **Мультиарендность:** у каждой таблицы есть `tenant_id` и политика RLS `tenant_isolation` (у `tenants` — по `id`). Без исключений.
+- **Роли БД:** приложение ходит под `DATABASE_URL` (роль без BYPASSRLS), миграции — под `DATABASE_OWNER_URL`. Запросы к данным магазина — только внутри `tenant_session(tenant_id)` из `app/db/session.py`. Новая таблица в миграции = RLS-политика + явный GRANT роли приложения.
+- **ledger** (и `audit_log`) — только вставка: роли приложения выданы лишь SELECT и INSERT, у ledger UPDATE и DELETE запрещены триггером.
 - **Цена и остаток** берутся только из БД (колонки `products.price`, `products.stock`) — никогда из эмбеддингов, контекста или «из головы» модели. Ответ с ценой, которой нет в каталоге, не отправляется.
 - **LLM** вызывается только через модуль `apps/api/app/llm`. Прямые импорты SDK Gemini в другом месте запрещены.
 - **Секреты** только из переменных окружения (`app/core/config.py`). Никаких ключей в коде, тестах и коммитах.
