@@ -8,7 +8,7 @@ API := cd apps/api &&
 ML := cd apps/ml &&
 WEB := cd apps/web &&
 
-.PHONY: help up down logs ps migrate test lint fmt install
+.PHONY: help up down logs ps migrate seed test lint fmt install
 
 help: ## Список команд
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -33,6 +33,9 @@ ps: ## Статус сервисов
 
 migrate: ## Применить миграции Alembic (нужен make up)
 	$(COMPOSE) exec api alembic upgrade head
+
+seed: ## Демо-магазин «Цветы Пион» (нужен make migrate)
+	$(COMPOSE) exec api python -m app.seed
 
 test: ## Тесты api (нужен make up — postgres) и ml
 	$(API) uv run pytest
