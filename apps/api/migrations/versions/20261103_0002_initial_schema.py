@@ -10,7 +10,10 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import make_url
 from sqlalchemy.dialects import postgresql
+
+from app.core.config import get_settings
 
 revision: str = "0002"
 down_revision: str | None = "0001"
@@ -36,18 +39,45 @@ TABLES = (
     "ledger",
     "audit_log",
 )
+APPEND_ONLY = ("ledger", "audit_log")
+CURRENT_TENANT = "nullif(current_setting('app.tenant_id', true), '')::uuid"
 
 
 def upgrade() -> None:
     _create_tables()
     _create_updated_at_triggers()
     _make_ledger_append_only()
+    _enable_rls()
+    _grant_app_role()
 
 
 def downgrade() -> None:
+    op.execute(f"REVOKE USAGE ON SCHEMA public FROM {_app_role()}")
     _drop_tables()
     op.execute("DROP FUNCTION IF EXISTS ledger_append_only()")
     op.execute("DROP FUNCTION IF EXISTS set_updated_at()")
+
+
+def _app_role() -> str:
+    return f'"{make_url(get_settings().database_url).username}"'
+
+
+def _enable_rls() -> None:
+    for table in TABLES:
+        column = "id" if table == "tenants" else "tenant_id"
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        op.execute(
+            f"CREATE POLICY tenant_isolation ON {table} "
+            f"USING ({column} = {CURRENT_TENANT}) WITH CHECK ({column} = {CURRENT_TENANT})"
+        )
+
+
+def _grant_app_role() -> None:
+    role = _app_role()
+    op.execute(f"GRANT USAGE ON SCHEMA public TO {role}")
+    for table in TABLES:
+        privileges = "SELECT, INSERT" if table in APPEND_ONLY else "SELECT, INSERT, UPDATE, DELETE"
+        op.execute(f"GRANT {privileges} ON {table} TO {role}")
 
 
 def _make_ledger_append_only() -> None:
