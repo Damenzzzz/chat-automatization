@@ -14,7 +14,14 @@ def _chunks(items: list[str], size: int) -> list[list[str]]:
 
 class Qwen3Reranker:
     def __init__(
-        self, name: str, *, device: str, instruction: str, max_tokens: int, batch_size: int
+        self,
+        name: str,
+        *,
+        device: str,
+        dtype: Any,
+        instruction: str,
+        max_tokens: int,
+        batch_size: int,
     ) -> None:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -24,7 +31,7 @@ class Qwen3Reranker:
         self.max_tokens = max_tokens
         self.batch_size = batch_size
         self.tokenizer: Any = AutoTokenizer.from_pretrained(name, padding_side="left")
-        loaded: Any = AutoModelForCausalLM.from_pretrained(name)
+        loaded: Any = AutoModelForCausalLM.from_pretrained(name, dtype=dtype)
         self.model: Any = loaded.to(device).eval()
         self.true_id = self.tokenizer.convert_tokens_to_ids("yes")
         self.false_id = self.tokenizer.convert_tokens_to_ids("no")
@@ -53,14 +60,16 @@ class Qwen3Reranker:
             )
             padded = {k: v.to(self.device) for k, v in padded.items()}
             with torch.no_grad():
-                logits = self.model(**padded).logits[:, -1, :]
+                logits = self.model(**padded, logits_to_keep=1).logits[:, -1, :]
             pair = torch.stack([logits[:, self.false_id], logits[:, self.true_id]], dim=1)
             scores.extend(torch.nn.functional.log_softmax(pair, dim=1)[:, 1].exp().tolist())
         return scores
 
 
 class CrossEncoderReranker:
-    def __init__(self, name: str, *, device: str, max_tokens: int, batch_size: int) -> None:
+    def __init__(
+        self, name: str, *, device: str, dtype: Any, max_tokens: int, batch_size: int
+    ) -> None:
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
         self.name = name
@@ -68,7 +77,7 @@ class CrossEncoderReranker:
         self.max_tokens = max_tokens
         self.batch_size = batch_size
         self.tokenizer: Any = AutoTokenizer.from_pretrained(name)
-        loaded: Any = AutoModelForSequenceClassification.from_pretrained(name)
+        loaded: Any = AutoModelForSequenceClassification.from_pretrained(name, dtype=dtype)
         self.model: Any = loaded.to(device).eval()
 
     def score(self, query: str, documents: list[str]) -> list[float]:

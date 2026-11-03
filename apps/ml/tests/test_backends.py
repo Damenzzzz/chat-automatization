@@ -25,6 +25,7 @@ def test_qwen3_backends() -> None:
     assert embedder.name == "Qwen/Qwen3-Embedding-0.6B"
     assert embedder.kwargs["query_prompt"] == f"Instruct: {QUERY_TASK}\nQuery:"
     assert embedder.kwargs["padding_side"] == "left"
+    assert str(embedder.kwargs["dtype"]) == "torch.float32"
     assert reranker.name == "Qwen/Qwen3-Reranker-0.6B"
     assert reranker.kwargs["instruction"] == QUERY_TASK
 

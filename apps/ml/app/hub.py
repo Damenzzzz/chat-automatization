@@ -5,7 +5,7 @@ from typing import Any, Literal
 import structlog
 
 from app.config import Settings
-from app.models.base import Embedder, Kind, Reranker, resolve_device
+from app.models.base import Embedder, Kind, Reranker, resolve_device, resolve_dtype
 from app.models.embedders import SentenceTransformerEmbedder, qwen3_query_prompt
 from app.models.fake import FakeEmbedder, FakeReranker
 from app.models.rerankers import CrossEncoderReranker, Qwen3Reranker
@@ -27,6 +27,7 @@ def build_embedder(settings: Settings, device: str) -> Embedder:
         return SentenceTransformerEmbedder(
             EMBEDDER_MODELS["qwen3"],
             device=device,
+            dtype=resolve_dtype(settings.ml_dtype, device),
             query_prompt=qwen3_query_prompt(settings.ml_query_task),
             max_tokens=settings.ml_embed_max_tokens,
             batch_size=settings.ml_embed_batch_size,
@@ -36,6 +37,7 @@ def build_embedder(settings: Settings, device: str) -> Embedder:
         return SentenceTransformerEmbedder(
             EMBEDDER_MODELS["bge-m3"],
             device=device,
+            dtype=resolve_dtype(settings.ml_dtype, device),
             query_prompt=None,
             max_tokens=settings.ml_embed_max_tokens,
             batch_size=settings.ml_embed_batch_size,
@@ -50,6 +52,7 @@ def build_reranker(settings: Settings, device: str) -> Reranker:
         return Qwen3Reranker(
             RERANKER_MODELS["qwen3"],
             device=device,
+            dtype=resolve_dtype(settings.ml_dtype, device),
             instruction=settings.ml_query_task,
             max_tokens=settings.ml_rerank_max_tokens,
             batch_size=settings.ml_rerank_batch_size,
@@ -58,6 +61,7 @@ def build_reranker(settings: Settings, device: str) -> Reranker:
         return CrossEncoderReranker(
             RERANKER_MODELS["bge-m3"],
             device=device,
+            dtype=resolve_dtype(settings.ml_dtype, device),
             max_tokens=min(settings.ml_rerank_max_tokens, 512),
             batch_size=settings.ml_rerank_batch_size,
         )

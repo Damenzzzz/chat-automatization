@@ -9,6 +9,7 @@ class SentenceTransformerEmbedder:
         name: str,
         *,
         device: str,
+        dtype: Any,
         query_prompt: str | None,
         max_tokens: int,
         batch_size: int,
@@ -18,7 +19,10 @@ class SentenceTransformerEmbedder:
 
         processor_kwargs = {"padding_side": padding_side} if padding_side else None
         self.model: Any = SentenceTransformer(
-            name, device=device, processor_kwargs=processor_kwargs
+            name,
+            device=device,
+            processor_kwargs=processor_kwargs,
+            model_kwargs={"dtype": dtype},
         )
         self.model.max_seq_length = max_tokens
         self.name = name

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     ml_embedder: Backend = "qwen3"
     ml_reranker: Backend = "qwen3"
     ml_device: str = "auto"
+    ml_dtype: str = "auto"
     ml_preload: bool = True
     ml_query_task: str = QUERY_TASK
 

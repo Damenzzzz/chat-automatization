@@ -1,4 +1,4 @@
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 Kind = Literal["query", "document"]
 EMBEDDING_DIM = 1024
@@ -25,3 +25,11 @@ def resolve_device(requested: str) -> str:
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
+
+
+def resolve_dtype(requested: str, device: str) -> Any:
+    import torch
+
+    if requested == "auto":
+        requested = "float32" if device == "cpu" else "bfloat16"
+    return getattr(torch, requested)
