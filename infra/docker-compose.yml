@@ -1,0 +1,152 @@
+# Окружение для разработки. Запуск из корня: make up
+# Хост-порты переопределяются переменными *_PORT в .env (см. .env.example).
+name: satushy
+
+x-env: &app-env
+  env_file:
+    - path: ../.env.example # безопасные dev-значения по умолчанию
+    - path: ../.env # ваши локальные значения и ключи (не коммитится)
+      required: false
+
+x-python-env: &python-env
+  # Адреса внутри docker-сети важнее значений из .env (там — localhost для запуска с хоста).
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-satushy}:${POSTGRES_PASSWORD:-satushy}@postgres:5432/${POSTGRES_DB:-satushy}
+  REDIS_URL: redis://redis:6379/0
+  S3_ENDPOINT_URL: http://minio:9000
+  ML_URL: http://ml:8001
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-satushy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-satushy}
+      POSTGRES_DB: ${POSTGRES_DB:-satushy}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Официальные образы minio/minio больше не публикуются; Chainguard собирает MinIO из исходников.
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-satushy}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-satushy-dev-secret}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: cgr.dev/chainguard/minio:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["bash", "-c"]
+    command:
+      - >-
+        mc alias set s3 http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "s3/$$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-satushy}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-satushy-dev-secret}
+      S3_BUCKET: ${S3_BUCKET:-satushy}
+    restart: "no"
+
+  api:
+    build: ../apps/api
+    <<: *app-env
+    environment: *python-env
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ../apps/api:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build: ../apps/api
+    <<: *app-env
+    environment: *python-env
+    command: ["arq", "app.worker.WorkerSettings", "--watch", "app"]
+    volumes:
+      - ../apps/api:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ml:
+    build: ../apps/ml
+    <<: *app-env
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    ports:
+      - "${ML_PORT:-8001}:8001"
+    volumes:
+      - ../apps/ml:/app
+      - ml-models:/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web:
+    build:
+      context: ../apps/web
+      target: dev
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ../apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  ml-models:
