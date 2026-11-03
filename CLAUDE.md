@@ -53,6 +53,17 @@ make down
 - Поиск пользователя до входа — только через SQL-функцию `auth_find_user` (SECURITY DEFINER), RLS не обходить иначе.
 - Админ Satushy живёт во внутреннем магазине `SATUSHY_TENANT_ID` (`app/cli.py`). `POST /admin/impersonate/{tenant_id}` → права владельца клиента; старт, стоп и каждый не-GET запрос пишутся в `audit_log` с `actor_id`.
 
+## LLM
+
+- Только через `app.llm`: `get_llm()` → `LLM.generate(model, messages, tools=None, response_schema=None)` → текст, `tool_calls`, `parsed`, `usage`. Без `GEMINI_API_KEY` `get_llm()` возвращает `None` — код обязан работать и без модели.
+- Имена моделей — из настроек (`LLM_MODEL_ROUTER/REPLY/COMPLEX`), не строками в коде. Цены — `app/llm/pricing.py`, стоимость — `cost_usd(model, usage)` (Decimal).
+- Ретраи на 429/5xx/таймаут встроены в `GeminiLLM`. В тестах — `app.llm.fake.FakeLLM` со сценарием; фикстура `app` по умолчанию отключает LLM.
+
+## Импорт каталога
+
+`POST /catalog/uploads` (xlsx/csv ≤ 20 МБ) или `/catalog/uploads/gsheet` → файл в S3, задача `pending` → `GET /catalog/uploads/{id}/mapping` (эвристика → LLM → сохранённый маппинг источника) → `POST /catalog/uploads/{id}/confirm` → ARQ `ingest_catalog` → `GET /ingest-jobs/{id}`.
+Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash`. `embedding_stale = true` только при смене статичного текста (`content_hash`: name, description, category, attributes); цена и остаток эмбеддинг не трогают.
+
 ## Модели
 
 | Задача | Модель | Где |
