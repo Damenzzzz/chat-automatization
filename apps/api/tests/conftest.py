@@ -6,9 +6,12 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from redis.asyncio import Redis
 from sqlalchemy import make_url, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
+
+from app.core.redis import get_redis
 
 OWNER_URL = make_url(
     os.environ.get(
@@ -23,11 +26,11 @@ assert TEST_DB.endswith("_test"), "тесты пересоздают базу, �
 
 os.environ.update(
     ENV="test",
+    REDIS_URL=os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15"),
     DATABASE_URL=APP_URL.render_as_string(hide_password=False),
     DATABASE_OWNER_URL=OWNER_URL.render_as_string(hide_password=False),
 )
 for key, value in {
-    "REDIS_URL": "redis://localhost:6379/1",
     "S3_ENDPOINT_URL": "http://localhost:9000",
     "S3_ACCESS_KEY": "test",
     "S3_SECRET_KEY": "test",
@@ -69,3 +72,10 @@ async def owner_engine(database: None) -> AsyncIterator[AsyncEngine]:
     engine = create_async_engine(OWNER_URL, poolclass=NullPool)
     yield engine
     await engine.dispose()
+
+
+@pytest.fixture
+async def redis() -> Redis:
+    client = get_redis()
+    await client.flushdb()
+    return client

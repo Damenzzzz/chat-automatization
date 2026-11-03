@@ -27,7 +27,24 @@ class Settings(BaseSettings):
     fernet_key: SecretStr
     jwt_secret: SecretStr
 
+    access_token_ttl: int = 15 * 60
+    refresh_token_ttl: int = 30 * 24 * 3600
+    otp_ttl: int = 10 * 60
+    otp_max_attempts: int = 5
+    otp_max_requests: int = 3
+
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str = "Satushy <no-reply@satushy.kz>"
+    smtp_starttls: bool = True
+
     ml_url: str = "http://localhost:8001"
+
+    @property
+    def cookie_secure(self) -> bool:
+        return self.env == "prod"
 
 
 @lru_cache

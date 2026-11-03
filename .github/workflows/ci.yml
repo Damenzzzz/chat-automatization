@@ -27,8 +27,14 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U satushy" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       TEST_DATABASE_OWNER_URL: postgresql+asyncpg://satushy:satushy@localhost:5432/satushy_test
+      TEST_REDIS_URL: redis://localhost:6379/15
     defaults:
       run:
         working-directory: apps/${{ matrix.app }}
