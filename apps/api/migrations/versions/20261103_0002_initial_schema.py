@@ -32,17 +32,42 @@ TABLES = (
     "leads",
     "unanswered",
     "search_log",
+    "payments",
+    "ledger",
+    "audit_log",
 )
 
 
 def upgrade() -> None:
     _create_tables()
     _create_updated_at_triggers()
+    _make_ledger_append_only()
 
 
 def downgrade() -> None:
     _drop_tables()
+    op.execute("DROP FUNCTION IF EXISTS ledger_append_only()")
     op.execute("DROP FUNCTION IF EXISTS set_updated_at()")
+
+
+def _make_ledger_append_only() -> None:
+    op.execute(
+        """
+        CREATE FUNCTION ledger_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            RAISE EXCEPTION 'ledger is append-only: % is not allowed', TG_OP
+                USING ERRCODE = 'insufficient_privilege';
+        END $$
+        """
+    )
+    op.execute(
+        "CREATE TRIGGER ledger_append_only BEFORE UPDATE OR DELETE ON ledger "
+        "FOR EACH ROW EXECUTE FUNCTION ledger_append_only()"
+    )
+    op.execute(
+        "CREATE TRIGGER ledger_no_truncate BEFORE TRUNCATE ON ledger "
+        "FOR EACH STATEMENT EXECUTE FUNCTION ledger_append_only()"
+    )
 
 
 def _create_updated_at_triggers() -> None:
@@ -347,6 +372,47 @@ def _create_tables() -> None:
     op.create_index("uq_users_email", "users", ["email"], unique=True)
     op.create_index("uq_users_phone", "users", ["phone"], unique=True)
     op.create_table(
+        "audit_log",
+        sa.Column("actor_id", sa.Uuid(), nullable=True),
+        sa.Column("action", sa.String(length=100), nullable=False),
+        sa.Column(
+            "details",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("ip", postgresql.INET(), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["actor_id"],
+            ["users.id"],
+            name=op.f("fk_audit_log_actor_id_users"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_audit_log_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_audit_log")),
+    )
+    op.create_index(op.f("ix_audit_log_actor_id"), "audit_log", ["actor_id"], unique=False)
+    op.create_index(op.f("ix_audit_log_tenant_id"), "audit_log", ["tenant_id"], unique=False)
+    op.create_table(
         "conversations",
         sa.Column("customer_id", sa.Uuid(), nullable=False),
         sa.Column("channel_id", sa.Uuid(), nullable=True),
@@ -456,6 +522,51 @@ def _create_tables() -> None:
     )
     op.create_index(op.f("ix_ingest_jobs_source_id"), "ingest_jobs", ["source_id"], unique=False)
     op.create_index(op.f("ix_ingest_jobs_tenant_id"), "ingest_jobs", ["tenant_id"], unique=False)
+    op.create_table(
+        "payments",
+        sa.Column("provider", sa.String(length=16), nullable=False),
+        sa.Column("amount_kzt", sa.BigInteger(), nullable=False),
+        sa.Column("status", sa.String(length=16), server_default="pending", nullable=False),
+        sa.Column("invoice_no", sa.String(length=64), nullable=True),
+        sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("confirmed_by", sa.Uuid(), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.CheckConstraint(
+            "provider IN ('invoice', 'kaspi', 'freedompay')", name=op.f("ck_payments_provider")
+        ),
+        sa.CheckConstraint(
+            "status IN ('pending', 'paid', 'cancelled', 'failed')", name=op.f("ck_payments_status")
+        ),
+        sa.CheckConstraint("amount_kzt > 0", name=op.f("ck_payments_amount_kzt")),
+        sa.ForeignKeyConstraint(
+            ["confirmed_by"],
+            ["users.id"],
+            name=op.f("fk_payments_confirmed_by_users"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_payments_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_payments")),
+        sa.UniqueConstraint("invoice_no", name=op.f("uq_payments_invoice_no")),
+    )
+    op.create_index(op.f("ix_payments_tenant_id"), "payments", ["tenant_id"], unique=False)
     op.create_table(
         "products",
         sa.Column("source_id", sa.Uuid(), nullable=True),
@@ -741,9 +852,60 @@ def _create_tables() -> None:
         op.f("ix_unanswered_conversation_id"), "unanswered", ["conversation_id"], unique=False
     )
     op.create_index(op.f("ix_unanswered_tenant_id"), "unanswered", ["tenant_id"], unique=False)
+    op.create_table(
+        "ledger",
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("type", sa.String(length=16), nullable=False),
+        sa.Column("amount_kzt", sa.BigInteger(), nullable=False),
+        sa.Column("cost_usd", sa.Numeric(precision=12, scale=6), nullable=True),
+        sa.Column("model", sa.String(length=64), nullable=True),
+        sa.Column("tokens_in", sa.Integer(), nullable=True),
+        sa.Column("tokens_out", sa.Integer(), nullable=True),
+        sa.Column("message_id", sa.Uuid(), nullable=True),
+        sa.Column("payment_id", sa.Uuid(), nullable=True),
+        sa.Column("comment", sa.Text(), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "type <> 'charge' OR amount_kzt <= 0", name=op.f("ck_ledger_charge_sign")
+        ),
+        sa.CheckConstraint("type <> 'topup' OR amount_kzt > 0", name=op.f("ck_ledger_topup_sign")),
+        sa.CheckConstraint("type IN ('topup', 'charge', 'refund')", name=op.f("ck_ledger_type")),
+        sa.ForeignKeyConstraint(
+            ["message_id"], ["messages.id"], name=op.f("fk_ledger_message_id_messages")
+        ),
+        sa.ForeignKeyConstraint(
+            ["payment_id"], ["payments.id"], name=op.f("fk_ledger_payment_id_payments")
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_ledger_tenant_id_tenants"),
+            ondelete="RESTRICT",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_ledger")),
+    )
+    op.create_index(op.f("ix_ledger_message_id"), "ledger", ["message_id"], unique=False)
+    op.create_index(op.f("ix_ledger_payment_id"), "ledger", ["payment_id"], unique=False)
+    op.create_index(op.f("ix_ledger_tenant_id"), "ledger", ["tenant_id"], unique=False)
 
 
 def _drop_tables() -> None:
+    op.drop_index(op.f("ix_ledger_tenant_id"), table_name="ledger")
+    op.drop_index(op.f("ix_ledger_payment_id"), table_name="ledger")
+    op.drop_index(op.f("ix_ledger_message_id"), table_name="ledger")
+    op.drop_table("ledger")
     op.drop_index(op.f("ix_unanswered_tenant_id"), table_name="unanswered")
     op.drop_index(op.f("ix_unanswered_conversation_id"), table_name="unanswered")
     op.drop_table("unanswered")
@@ -780,6 +942,8 @@ def _drop_tables() -> None:
         postgresql_ops={"embedding": "vector_cosine_ops"},
     )
     op.drop_table("products")
+    op.drop_index(op.f("ix_payments_tenant_id"), table_name="payments")
+    op.drop_table("payments")
     op.drop_index(op.f("ix_ingest_jobs_tenant_id"), table_name="ingest_jobs")
     op.drop_index(op.f("ix_ingest_jobs_source_id"), table_name="ingest_jobs")
     op.drop_table("ingest_jobs")
@@ -788,6 +952,9 @@ def _drop_tables() -> None:
     op.drop_index(op.f("ix_conversations_customer_id"), table_name="conversations")
     op.drop_index(op.f("ix_conversations_channel_id"), table_name="conversations")
     op.drop_table("conversations")
+    op.drop_index(op.f("ix_audit_log_tenant_id"), table_name="audit_log")
+    op.drop_index(op.f("ix_audit_log_actor_id"), table_name="audit_log")
+    op.drop_table("audit_log")
     op.drop_index("uq_users_phone", table_name="users")
     op.drop_index("uq_users_email", table_name="users")
     op.drop_index(op.f("ix_users_tenant_id"), table_name="users")
