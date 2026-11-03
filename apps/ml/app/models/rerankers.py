@@ -57,3 +57,33 @@ class Qwen3Reranker:
             pair = torch.stack([logits[:, self.false_id], logits[:, self.true_id]], dim=1)
             scores.extend(torch.nn.functional.log_softmax(pair, dim=1)[:, 1].exp().tolist())
         return scores
+
+
+class CrossEncoderReranker:
+    def __init__(self, name: str, *, device: str, max_tokens: int, batch_size: int) -> None:
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+        self.name = name
+        self.device = device
+        self.max_tokens = max_tokens
+        self.batch_size = batch_size
+        self.tokenizer: Any = AutoTokenizer.from_pretrained(name)
+        loaded: Any = AutoModelForSequenceClassification.from_pretrained(name)
+        self.model: Any = loaded.to(device).eval()
+
+    def score(self, query: str, documents: list[str]) -> list[float]:
+        import torch
+
+        scores: list[float] = []
+        for batch in _chunks(documents, self.batch_size):
+            inputs = self.tokenizer(
+                [[query, d] for d in batch],
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+                max_length=self.max_tokens,
+            ).to(self.device)
+            with torch.no_grad():
+                logits = self.model(**inputs, return_dict=True).logits.view(-1).float()
+            scores.extend(torch.sigmoid(logits).tolist())
+        return scores

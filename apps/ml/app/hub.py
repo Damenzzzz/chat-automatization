@@ -8,12 +8,12 @@ from app.config import Settings
 from app.models.base import Embedder, Kind, Reranker, resolve_device
 from app.models.embedders import SentenceTransformerEmbedder, qwen3_query_prompt
 from app.models.fake import FakeEmbedder, FakeReranker
-from app.models.rerankers import Qwen3Reranker
+from app.models.rerankers import CrossEncoderReranker, Qwen3Reranker
 
 log = structlog.get_logger()
 
-EMBEDDER_MODELS = {"qwen3": "Qwen/Qwen3-Embedding-0.6B"}
-RERANKER_MODELS = {"qwen3": "Qwen/Qwen3-Reranker-0.6B"}
+EMBEDDER_MODELS = {"qwen3": "Qwen/Qwen3-Embedding-0.6B", "bge-m3": "BAAI/bge-m3"}
+RERANKER_MODELS = {"qwen3": "Qwen/Qwen3-Reranker-0.6B", "bge-m3": "BAAI/bge-reranker-v2-m3"}
 
 
 class NotReadyError(Exception):
@@ -32,6 +32,14 @@ def build_embedder(settings: Settings, device: str) -> Embedder:
             batch_size=settings.ml_embed_batch_size,
             padding_side="left",
         )
+    if settings.ml_embedder == "bge-m3":
+        return SentenceTransformerEmbedder(
+            EMBEDDER_MODELS["bge-m3"],
+            device=device,
+            query_prompt=None,
+            max_tokens=settings.ml_embed_max_tokens,
+            batch_size=settings.ml_embed_batch_size,
+        )
     raise ValueError(f"неизвестный эмбеддер: {settings.ml_embedder}")
 
 
@@ -44,6 +52,13 @@ def build_reranker(settings: Settings, device: str) -> Reranker:
             device=device,
             instruction=settings.ml_query_task,
             max_tokens=settings.ml_rerank_max_tokens,
+            batch_size=settings.ml_rerank_batch_size,
+        )
+    if settings.ml_reranker == "bge-m3":
+        return CrossEncoderReranker(
+            RERANKER_MODELS["bge-m3"],
+            device=device,
+            max_tokens=min(settings.ml_rerank_max_tokens, 512),
             batch_size=settings.ml_rerank_batch_size,
         )
     raise ValueError(f"неизвестный реранкер: {settings.ml_reranker}")

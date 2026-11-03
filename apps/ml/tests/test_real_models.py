@@ -20,7 +20,7 @@ def _dot(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b, strict=True))
 
 
-@pytest.mark.parametrize("backend", ["qwen3"])
+@pytest.mark.parametrize("backend", ["qwen3", "bge-m3"])
 def test_real_embedder_ranks_relevant_docs(backend: str) -> None:
     embedder = build_embedder(Settings(ml_embedder=backend), "cpu")
     docs = embedder.encode(DOCS, "document")
@@ -31,7 +31,7 @@ def test_real_embedder_ranks_relevant_docs(backend: str) -> None:
     assert max(range(3), key=lambda i: _dot(kk, docs[i])) == 1
 
 
-@pytest.mark.parametrize("backend", ["qwen3"])
+@pytest.mark.parametrize("backend", ["qwen3", "bge-m3"])
 def test_real_reranker_prefers_relevant_doc(backend: str) -> None:
     reranker = build_reranker(Settings(ml_reranker=backend), "cpu")
     scores = reranker.score("розовые пионы на день рождения", DOCS)
