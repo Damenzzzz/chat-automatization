@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.cookies import ACCESS_COOKIE
@@ -15,6 +15,9 @@ from app.auth.users import load_user
 from app.core.config import get_settings
 from app.core.redis import get_redis
 from app.db.session import tenant_session
+from app.models import AuditLog
+
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 def get_otp() -> OtpService:
@@ -75,8 +78,17 @@ def require_role(*roles: str) -> Callable[[Principal], Awaitable[Principal]]:
     return dependency
 
 
-async def tenant_db(principal: CurrentUser) -> AsyncIterator[AsyncSession]:
+async def tenant_db(principal: CurrentUser, request: Request) -> AsyncIterator[AsyncSession]:
     async with tenant_session(principal.tenant_id) as session:
+        if principal.actor_id and request.method not in SAFE_METHODS:
+            session.add(
+                AuditLog(
+                    tenant_id=principal.tenant_id,
+                    actor_id=principal.actor_id,
+                    action=f"{request.method} {request.url.path}",
+                    details={"impersonation": True},
+                )
+            )
         yield session
 
 
