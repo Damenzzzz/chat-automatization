@@ -26,6 +26,7 @@ make install            # uv sync, npm ci, pre-commit install
 make up                 # все сервисы, ждёт healthcheck
 make migrate            # alembic upgrade head внутри контейнера api
 make seed               # демо-магазин «Цветы Пион»: 30 товаров и база знаний
+make admin ARGS="--email you@satushy.kz"   # админ Satushy
 make test               # pytest api + ml; тесты api пересоздают базу satushy_test в docker-postgres
 make lint               # ruff, mypy, eslint, prettier, tsc
 make fmt                # автоформат
@@ -43,6 +44,14 @@ make down
 - **LLM** вызывается только через модуль `apps/api/app/llm`. Прямые импорты SDK Gemini в другом месте запрещены.
 - **Секреты** только из переменных окружения (`app/core/config.py`). Никаких ключей в коде, тестах и коммитах.
 - **Деньги:** суммы в тенге — целые числа (`int`, `BIGINT`); себестоимость в USD — `Decimal` (`NUMERIC`). Float для денег не использовать.
+
+## Вход и роли
+
+- Вход по коду: `POST /auth/request-code` → `POST /auth/verify` (новый номер/почта + `signup` создаёт магазин и владельца). В dev код пишется в лог api (`auth.code`), почта — через SMTP из env, SMS нет.
+- Access JWT (15 мин) и refresh (30 дней, ротация, хранится хешем в Redis) — httpOnly cookie. `POST /auth/refresh`, `POST /auth/logout`.
+- В эндпоинтах: `CurrentUser`, `require_role(...)`, `TenantDb` из `app/auth/deps.py`. `TenantDb` уже выставил `app.tenant_id` — отдельно `tenant_session` в роутерах не нужен.
+- Поиск пользователя до входа — только через SQL-функцию `auth_find_user` (SECURITY DEFINER), RLS не обходить иначе.
+- Админ Satushy живёт во внутреннем магазине `SATUSHY_TENANT_ID` (`app/cli.py`). `POST /admin/impersonate/{tenant_id}` → права владельца клиента; старт, стоп и каждый не-GET запрос пишутся в `audit_log` с `actor_id`.
 
 ## Модели
 
