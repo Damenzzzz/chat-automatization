@@ -26,6 +26,12 @@ TABLES = (
     "ingest_jobs",
     "products",
     "kb_chunks",
+    "customers",
+    "conversations",
+    "messages",
+    "leads",
+    "unanswered",
+    "search_log",
 )
 
 
@@ -217,6 +223,47 @@ def _create_tables() -> None:
     )
     op.create_index(op.f("ix_channels_tenant_id"), "channels", ["tenant_id"], unique=False)
     op.create_table(
+        "customers",
+        sa.Column("channel", sa.String(length=16), nullable=False),
+        sa.Column("external_id", sa.String(length=200), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=True),
+        sa.Column("phone", sa.String(length=32), nullable=True),
+        sa.Column("lang", sa.String(length=8), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.CheckConstraint(
+            "channel IN ('whatsapp', 'instagram', 'telegram', 'web')",
+            name=op.f("ck_customers_channel"),
+        ),
+        sa.CheckConstraint("lang IN ('ru', 'kk', 'mixed')", name=op.f("ck_customers_lang")),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_customers_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_customers")),
+        sa.UniqueConstraint(
+            "tenant_id",
+            "channel",
+            "external_id",
+            name=op.f("uq_customers_tenant_id_channel_external_id"),
+        ),
+    )
+    op.create_index(op.f("ix_customers_tenant_id"), "customers", ["tenant_id"], unique=False)
+    op.create_table(
         "kb_chunks",
         sa.Column("source", sa.String(length=100), nullable=False),
         sa.Column("title", sa.String(length=200), nullable=True),
@@ -299,6 +346,64 @@ def _create_tables() -> None:
     op.create_index(op.f("ix_users_tenant_id"), "users", ["tenant_id"], unique=False)
     op.create_index("uq_users_email", "users", ["email"], unique=True)
     op.create_index("uq_users_phone", "users", ["phone"], unique=True)
+    op.create_table(
+        "conversations",
+        sa.Column("customer_id", sa.Uuid(), nullable=False),
+        sa.Column("channel_id", sa.Uuid(), nullable=True),
+        sa.Column("mode", sa.String(length=8), server_default="bot", nullable=False),
+        sa.Column("status", sa.String(length=8), server_default="open", nullable=False),
+        sa.Column("last_message_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.CheckConstraint("mode IN ('bot', 'human')", name=op.f("ck_conversations_mode")),
+        sa.CheckConstraint("status IN ('open', 'closed')", name=op.f("ck_conversations_status")),
+        sa.ForeignKeyConstraint(
+            ["channel_id"],
+            ["channels.id"],
+            name=op.f("fk_conversations_channel_id_channels"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["customer_id"],
+            ["customers.id"],
+            name=op.f("fk_conversations_customer_id_customers"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_conversations_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_conversations")),
+    )
+    op.create_index(
+        op.f("ix_conversations_channel_id"), "conversations", ["channel_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_conversations_customer_id"), "conversations", ["customer_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_conversations_tenant_id"), "conversations", ["tenant_id"], unique=False
+    )
+    op.create_index(
+        "ix_conversations_tenant_id_last_message_at",
+        "conversations",
+        ["tenant_id", "last_message_at"],
+        unique=False,
+    )
     op.create_table(
         "ingest_jobs",
         sa.Column("source_id", sa.Uuid(), nullable=False),
@@ -449,9 +554,208 @@ def _create_tables() -> None:
     op.create_index("ix_products_tenant_id_price", "products", ["tenant_id", "price"], unique=False)
     op.create_index("ix_products_tenant_id_stock", "products", ["tenant_id", "stock"], unique=False)
     op.create_index("ix_products_tsv", "products", ["tsv"], unique=False, postgresql_using="gin")
+    op.create_table(
+        "leads",
+        sa.Column("conversation_id", sa.Uuid(), nullable=True),
+        sa.Column(
+            "items",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'[]'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("total_kzt", sa.BigInteger(), nullable=True),
+        sa.Column("contact_name", sa.String(length=200), nullable=True),
+        sa.Column("contact_phone", sa.String(length=32), nullable=True),
+        sa.Column("address", sa.Text(), nullable=True),
+        sa.Column("delivery_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("status", sa.String(length=16), server_default="new", nullable=False),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.CheckConstraint(
+            "status IN ('new', 'in_progress', 'done', 'cancelled')", name=op.f("ck_leads_status")
+        ),
+        sa.CheckConstraint("total_kzt >= 0", name=op.f("ck_leads_total_kzt")),
+        sa.ForeignKeyConstraint(
+            ["conversation_id"],
+            ["conversations.id"],
+            name=op.f("fk_leads_conversation_id_conversations"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_leads_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_leads")),
+    )
+    op.create_index(op.f("ix_leads_conversation_id"), "leads", ["conversation_id"], unique=False)
+    op.create_index(op.f("ix_leads_tenant_id"), "leads", ["tenant_id"], unique=False)
+    op.create_table(
+        "messages",
+        sa.Column("conversation_id", sa.Uuid(), nullable=False),
+        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("content", sa.Text(), nullable=True),
+        sa.Column("media", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("external_id", sa.String(length=200), nullable=True),
+        sa.Column("model", sa.String(length=64), nullable=True),
+        sa.Column("tokens_in", sa.Integer(), nullable=True),
+        sa.Column("tokens_out", sa.Integer(), nullable=True),
+        sa.Column("latency_ms", sa.Integer(), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.CheckConstraint(
+            "role IN ('customer', 'bot', 'manager', 'system')", name=op.f("ck_messages_role")
+        ),
+        sa.ForeignKeyConstraint(
+            ["conversation_id"],
+            ["conversations.id"],
+            name=op.f("fk_messages_conversation_id_conversations"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_messages_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_messages")),
+    )
+    op.create_index(
+        "ix_messages_conversation_id_created_at",
+        "messages",
+        ["conversation_id", "created_at"],
+        unique=False,
+    )
+    op.create_index(op.f("ix_messages_tenant_id"), "messages", ["tenant_id"], unique=False)
+    op.create_table(
+        "search_log",
+        sa.Column("conversation_id", sa.Uuid(), nullable=True),
+        sa.Column("query", sa.Text(), nullable=False),
+        sa.Column("lang", sa.String(length=8), nullable=True),
+        sa.Column(
+            "filters",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column(
+            "results",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'[]'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("latency_ms", sa.Integer(), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.CheckConstraint("lang IN ('ru', 'kk', 'mixed')", name=op.f("ck_search_log_lang")),
+        sa.ForeignKeyConstraint(
+            ["conversation_id"],
+            ["conversations.id"],
+            name=op.f("fk_search_log_conversation_id_conversations"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_search_log_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_search_log")),
+    )
+    op.create_index(
+        op.f("ix_search_log_conversation_id"), "search_log", ["conversation_id"], unique=False
+    )
+    op.create_index(op.f("ix_search_log_tenant_id"), "search_log", ["tenant_id"], unique=False)
+    op.create_table(
+        "unanswered",
+        sa.Column("conversation_id", sa.Uuid(), nullable=True),
+        sa.Column("question", sa.Text(), nullable=False),
+        sa.Column("answer", sa.Text(), nullable=True),
+        sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["conversation_id"],
+            ["conversations.id"],
+            name=op.f("fk_unanswered_conversation_id_conversations"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_unanswered_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_unanswered")),
+    )
+    op.create_index(
+        op.f("ix_unanswered_conversation_id"), "unanswered", ["conversation_id"], unique=False
+    )
+    op.create_index(op.f("ix_unanswered_tenant_id"), "unanswered", ["tenant_id"], unique=False)
 
 
 def _drop_tables() -> None:
+    op.drop_index(op.f("ix_unanswered_tenant_id"), table_name="unanswered")
+    op.drop_index(op.f("ix_unanswered_conversation_id"), table_name="unanswered")
+    op.drop_table("unanswered")
+    op.drop_index(op.f("ix_search_log_tenant_id"), table_name="search_log")
+    op.drop_index(op.f("ix_search_log_conversation_id"), table_name="search_log")
+    op.drop_table("search_log")
+    op.drop_index(op.f("ix_messages_tenant_id"), table_name="messages")
+    op.drop_index("ix_messages_conversation_id_created_at", table_name="messages")
+    op.drop_table("messages")
+    op.drop_index(op.f("ix_leads_tenant_id"), table_name="leads")
+    op.drop_index(op.f("ix_leads_conversation_id"), table_name="leads")
+    op.drop_table("leads")
     op.drop_index("ix_products_tsv", table_name="products", postgresql_using="gin")
     op.drop_index("ix_products_tenant_id_stock", table_name="products")
     op.drop_index("ix_products_tenant_id_price", table_name="products")
@@ -479,6 +783,11 @@ def _drop_tables() -> None:
     op.drop_index(op.f("ix_ingest_jobs_tenant_id"), table_name="ingest_jobs")
     op.drop_index(op.f("ix_ingest_jobs_source_id"), table_name="ingest_jobs")
     op.drop_table("ingest_jobs")
+    op.drop_index("ix_conversations_tenant_id_last_message_at", table_name="conversations")
+    op.drop_index(op.f("ix_conversations_tenant_id"), table_name="conversations")
+    op.drop_index(op.f("ix_conversations_customer_id"), table_name="conversations")
+    op.drop_index(op.f("ix_conversations_channel_id"), table_name="conversations")
+    op.drop_table("conversations")
     op.drop_index("uq_users_phone", table_name="users")
     op.drop_index("uq_users_email", table_name="users")
     op.drop_index(op.f("ix_users_tenant_id"), table_name="users")
@@ -492,6 +801,8 @@ def _drop_tables() -> None:
         postgresql_ops={"embedding": "vector_cosine_ops"},
     )
     op.drop_table("kb_chunks")
+    op.drop_index(op.f("ix_customers_tenant_id"), table_name="customers")
+    op.drop_table("customers")
     op.drop_index(op.f("ix_channels_tenant_id"), table_name="channels")
     op.drop_table("channels")
     op.drop_index(op.f("ix_catalog_sources_tenant_id"), table_name="catalog_sources")
