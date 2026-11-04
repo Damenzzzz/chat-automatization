@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.routers import admin, auth, catalog, debug, ingest_jobs, me, team
+from app.routers import admin, auth, catalog, debug, ingest_jobs, me, sandbox, team
 
 
 def create_app() -> FastAPI:
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(catalog.router)
     app.include_router(ingest_jobs.router)
     app.include_router(debug.router)
+    app.include_router(sandbox.router)
     return app
 
 

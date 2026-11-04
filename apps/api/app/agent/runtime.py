@@ -1,13 +1,18 @@
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Annotated, Any
 
+from fastapi import Depends
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
+from app.agent.checkpoint import get_checkpointer
 from app.agent.graph import build_graph
 from app.agent.nodes import AgentDeps, AgentNodes
 from app.agent.state import ChatState
+from app.core.queue import Queue, get_queue
+from app.llm import LLM, get_llm
+from app.mlclient import MLClient, get_ml_client
 
 
 @dataclass
@@ -54,3 +59,11 @@ class Agent:
             trace=state.get("trace", []),
             usage=state.get("usage", []),
         )
+
+
+async def get_agent(
+    llm: Annotated[LLM | None, Depends(get_llm)],
+    ml: Annotated[MLClient, Depends(get_ml_client)],
+    queue: Annotated[Queue, Depends(get_queue)],
+) -> Agent:
+    return Agent(AgentDeps(llm=llm, ml=ml, queue=queue), await get_checkpointer())
