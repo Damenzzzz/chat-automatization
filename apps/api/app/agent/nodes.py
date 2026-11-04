@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from sqlalchemy import select
 
 from app.agent.graph import MAX_RETRIES, MAX_TOOL_HOPS
+from app.agent.guard import check_reply
 from app.agent.llmcall import call_llm
 from app.agent.prompt import load_profile
 from app.agent.respond import FALLBACK, ai_message, build_messages, pick_model, tool_message
@@ -289,10 +290,36 @@ class AgentNodes:
         }
 
     async def guard_out(self, state: ChatState) -> dict[str, Any]:
-        return {"check_ok": True, "trace": step(state, "guard_out")}
+        last = state["messages"][-1]
+        reply = str(last.content or "") if isinstance(last, AIMessage) else ""
+        async with tenant_session(self.tenant(state)) as session:
+            profile = await load_profile(session, self.tenant(state))
+        result = check_reply(
+            reply, state.get("context", []), profile, last_human(state), state.get("slots", {})
+        )
+        trace = step(
+            state,
+            "guard_out",
+            ok=result.ok,
+            amounts=result.amounts,
+            skus=result.skus,
+            errors=result.errors,
+        )
+        if result.ok:
+            return {"check_ok": True, "check_errors": [], "trace": trace}
+        update: dict[str, Any] = {"check_ok": False, "check_errors": result.errors, "trace": trace}
+        if last.id:
+            update["messages"] = [RemoveMessage(id=last.id)]
+        return update
 
     async def fallback(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "fallback")}
+        lang = state.get("lang", "ru")
+        await self.toolbox(state).handoff("ответ не прошёл проверку цен")
+        return {
+            "messages": [AIMessage(FALLBACK.get(lang, FALLBACK["ru"]))],
+            "human_mode": True,
+            "trace": step(state, "fallback", errors=state.get("check_errors", [])),
+        }
 
     async def send(self, state: ChatState) -> dict[str, Any]:
         last = state["messages"][-1]
