@@ -108,3 +108,53 @@ async def test_hits_carry_reasons_and_db_price(shop: uuid.UUID) -> None:
     assert top.reasons
     assert set(top.ranks) == set(top.reasons)
     assert isinstance(top.price, int)
+
+
+class ScriptedML(FakeML):
+    def __init__(self, prefer: str) -> None:
+        super().__init__()
+        self.prefer = prefer
+
+    async def rerank(self, query: str, documents: list[str]) -> list[float]:
+        self.reranked.append(documents)
+        return [1.0 if self.prefer in d else 0.1 for d in documents]
+
+
+async def test_reranker_reorders_top_and_limits_pool(owner_engine: AsyncEngine) -> None:
+    class ReverseML(FakeML):
+        async def rerank(self, query: str, documents: list[str]) -> list[float]:
+            self.reranked.append(documents)
+            return [i / len(documents) for i in range(len(documents))]
+
+    tenant_id = await make_shop(
+        owner_engine, [{"name": f"Букет пионов {i}", "price": 10000 + i} for i in range(40)]
+    )
+    ml = ReverseML()
+    async with tenant_session(tenant_id) as session:
+        result = await search_products(session, "букет пионов", ml=ml)
+    [pool] = ml.reranked
+    assert len(pool) == 30
+    assert [h.name for h in result.items] == [d.split("\n")[0] for d in pool[::-1][:5]]
+    assert [h.score for h in result.items] == sorted(
+        (h.score or 0 for h in result.items), reverse=True
+    )
+
+
+async def test_exact_sku_stays_first_after_rerank(shop: uuid.UUID) -> None:
+    async with tenant_session(shop) as session:
+        result = await search_products(session, "FL-042 белые розы", ml=ScriptedML("розы"))
+    assert result.items[0].sku == "FL-042"
+
+
+async def test_rerank_failure_falls_back_to_rrf(shop: uuid.UUID) -> None:
+    class RerankDown(FakeML):
+        async def rerank(self, query: str, documents: list[str]) -> list[float]:
+            from app.mlclient import MLError
+
+            raise MLError("down")
+
+    async with tenant_session(shop) as session:
+        result = await search_products(session, "розовые пионы", ml=RerankDown())
+        plain = await search_products(session, "розовые пионы", ml=FakeML(), use_reranker=False)
+    assert [h.id for h in result.items] == [h.id for h in plain.items]
+    assert all(h.score is None for h in result.items)
