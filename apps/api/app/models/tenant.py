@@ -1,9 +1,11 @@
+import uuid
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    ForeignKey,
     Index,
     Integer,
     LargeBinary,
@@ -52,7 +54,15 @@ class User(IdMixin, TimestampMixin, TenantMixin, Base):
 
 class BotProfile(IdMixin, TimestampMixin, TenantMixin, Base):
     __tablename__ = "bot_profiles"
-    __table_args__ = (UniqueConstraint("tenant_id", "version"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "version"),
+        Index(
+            "uq_bot_profiles_tenant_id_active",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
+    )
 
     version: Mapped[int] = mapped_column(Integer, server_default="1")
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
@@ -61,6 +71,10 @@ class BotProfile(IdMixin, TimestampMixin, TenantMixin, Base):
     greeting: Mapped[str | None] = mapped_column(Text)
     languages: Mapped[list[str]] = mapped_column(ARRAY(String(8)), server_default=text("'{ru,kk}'"))
     model_policy: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    based_on: Mapped[int | None] = mapped_column(Integer)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
 
 
 class Channel(IdMixin, TimestampMixin, TenantMixin, Base):
