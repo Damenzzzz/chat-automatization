@@ -68,8 +68,8 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 ## ML-сервис и эмбеддинги
 
 - `apps/ml`: `POST /embed {texts, kind: query|document}` → нормализованные векторы 1024; `POST /rerank {query, documents}` → оценки 0..1; `GET /health` — статус загрузки и модели. Модели грузятся в фоне при старте, до готовности `/embed` и `/rerank` отвечают 503 (клиент API ретраит).
-- Бэкенды через env: `ML_EMBEDDER` / `ML_RERANKER` = `qwen3` (по умолчанию) | `bge-m3` | `fake` (без моделей, для разработки и CI). Кэш Hugging Face — volume `ml-models` (`HF_HOME=/models`), первый старт качает ~2,4 ГБ.
-- На CPU модели грузятся в float32 (`ML_DTYPE=auto`; bf16 на CPU в разы медленнее). Qwen3 эмбеддер + реранкер занимают ~5,5 ГБ RAM — Docker Desktop нужно ≥ 10 ГБ памяти, иначе `ML_EMBEDDER=fake ML_RERANKER=fake` или `ML_DTYPE=bfloat16`.
+- Бэкенды через env: `ML_EMBEDDER` / `ML_RERANKER` = `bge-m3` (по умолчанию, [ADR 0003](docs/adr/0003-bge-m3-default.md)) | `qwen3` | `fake` (без моделей, для разработки и CI). Кэш Hugging Face — volume `ml-models` (`HF_HOME=/models`), первый старт качает ~4,5 ГБ.
+- На CPU модели грузятся в float32 (`ML_DTYPE=auto`; bf16 на CPU в разы медленнее). BGE-M3 эмбеддер + реранкер занимают ~3,5 ГБ RAM, Qwen3 — ~5,5 ГБ (Docker Desktop ≥ 10 ГБ); без памяти — `ML_EMBEDDER=fake ML_RERANKER=fake`. Смена модели = полная переиндексация (все `embedding_stale = true`).
 - Тесты на настоящих моделях: `ML_REAL_MODELS=1` (в CI пропускаются); гонять в отдельном контейнере при остановленном `ml`, иначе не хватит памяти.
 - В API: `app.mlclient.get_ml_client()`; батчи по 64, ретраи на 429/5xx/сетевые ошибки.
 - `reindex_embeddings(tenant_id)` (ARQ) эмбеддит products и kb_chunks с `embedding_stale` или без вектора и снимает флаг, только если строку не меняли во время расчёта (проверка `updated_at`). Ставится после импорта каталога и `make seed`, плюс cron `reindex_all` раз в 10 минут. Текст товара — `app/catalog/embedding_text.py`: без цены и остатка.
@@ -91,8 +91,8 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 | Понимание запроса (язык, намерение, слоты) | `gemini-3.1-flash-lite` | Gemini API |
 | Ответ по умолчанию | `gemini-3.5-flash-lite` | Gemini API |
 | Сложный диалог | `gemini-3.6-flash` | Gemini API |
-| Эмбеддинги | Qwen3-Embedding-0.6B | локально, apps/ml |
-| Реранкер | Qwen3-Reranker-0.6B | локально, apps/ml |
+| Эмбеддинги | BGE-M3 (запасной — Qwen3-Embedding-0.6B) | локально, apps/ml |
+| Реранкер | bge-reranker-v2-m3 (запасной — Qwen3-Reranker-0.6B) | локально, apps/ml |
 | Голос → текст | faster-whisper | локально, apps/ml |
 
 Ключ Gemini — ключ Vertex AI: клиент создаётся с `vertexai=True` (`GEMINI_USE_VERTEXAI=true`).

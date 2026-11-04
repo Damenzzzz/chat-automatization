@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     env: Literal["dev", "test", "prod"] = "dev"
     log_level: str = "INFO"
 
-    ml_embedder: Backend = "qwen3"
-    ml_reranker: Backend = "qwen3"
+    ml_embedder: Backend = "bge-m3"
+    ml_reranker: Backend = "bge-m3"
     ml_device: str = "auto"
     ml_dtype: str = "auto"
     ml_preload: bool = True
