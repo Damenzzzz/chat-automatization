@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.agent.llmcall import call_llm
 from app.agent.state import ChatState, step
+from app.agent.tools import ToolBox, merge_context
 from app.agent.understand import (
     MAX_INPUT_CHARS,
     Understanding,
@@ -128,17 +129,55 @@ class AgentNodes:
             ),
         }
 
+    def toolbox(self, state: ChatState) -> ToolBox:
+        return ToolBox(
+            tenant_id=self.tenant(state),
+            conversation_id=uuid.UUID(state["conversation_id"]),
+            ml=self.deps.ml,
+            queue=self.deps.queue,
+            sandbox=bool(state.get("sandbox")),
+            lang=state.get("lang"),
+        )
+
     async def retrieve(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "retrieve")}
+        box, slots = self.toolbox(state), state.get("slots", {})
+        context = list(state.get("context", []))
+        if slots.get("sku"):
+            context = merge_context(context, (await box.get_product(str(slots["sku"]))).context)
+        query = state.get("search_query") or last_human(state)
+        found = await box.search_products(query, budget_max=slots.get("budget_max"))
+        context = merge_context(context, found.context)
+        skus = [c.get("sku") for c in context if c["type"] == "product"]
+        return {
+            "context": context,
+            "trace": step(
+                state, "retrieve", query=query, budget_max=slots.get("budget_max"), found=skus
+            ),
+        }
 
     async def kb(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "kb")}
+        query = state.get("search_query") or last_human(state)
+        found = await self.toolbox(state).search_kb(query)
+        context = merge_context(list(state.get("context", [])), found.context)
+        sources = [c["source"] for c in found.context]
+        return {"context": context, "trace": step(state, "kb", query=query, found=sources)}
 
     async def order(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "order")}
+        slots = state.get("slots", {})
+        context = list(state.get("context", []))
+        if slots.get("sku"):
+            found = await self.toolbox(state).get_product(str(slots["sku"]))
+            context = merge_context(context, found.context)
+        return {
+            "context": context,
+            "trace": step(
+                state, "order", sku=slots.get("sku"), delivery_time=slots.get("delivery_time")
+            ),
+        }
 
     async def handoff(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "handoff")}
+        await self.toolbox(state).handoff("покупатель попросил менеджера")
+        return {"human_mode": True, "trace": step(state, "handoff", reason="intent=human")}
 
     async def respond(self, state: ChatState) -> dict[str, Any]:
         return {"messages": [AIMessage("Здравствуйте!")], "trace": step(state, "respond")}

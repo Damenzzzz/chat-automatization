@@ -1,6 +1,7 @@
 import uuid
 from typing import Any, ClassVar
 
+import structlog
 from arq import cron, func
 from arq.connections import RedisSettings
 
@@ -13,6 +14,7 @@ from app.mlclient import get_ml_client
 
 _settings = get_settings()
 configure_logging(_settings.log_level, json=_settings.env == "prod")
+log = structlog.get_logger()
 
 REINDEX = "reindex_embeddings"
 
@@ -44,10 +46,17 @@ async def reindex_all(ctx: dict[str, Any]) -> int:
     return len(tenants)
 
 
+async def notify_manager(
+    ctx: dict[str, Any], tenant_id: str, event: str, payload: dict[str, Any]
+) -> None:
+    log.info("manager.notify", tenant_id=tenant_id, event=event, **payload)
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [
         ping,
         ingest_catalog,
+        notify_manager,
         func(reindex_embeddings, name=REINDEX, keep_result=0),
     ]
     cron_jobs: ClassVar[list[Any]] = [

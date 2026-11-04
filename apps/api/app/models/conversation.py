@@ -94,6 +94,8 @@ class Lead(IdMixin, TimestampMixin, TenantMixin, Base):
     contact_phone: Mapped[str | None] = mapped_column(String(32))
     address: Mapped[str | None] = mapped_column(Text)
     delivery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_note: Mapped[str | None] = mapped_column(Text)
+    comment: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), server_default="new")
 
 
