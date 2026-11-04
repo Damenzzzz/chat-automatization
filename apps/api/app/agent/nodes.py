@@ -7,10 +7,20 @@ import structlog
 from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import select
 
+from app.agent.llmcall import call_llm
 from app.agent.state import ChatState, step
+from app.agent.understand import (
+    MAX_INPUT_CHARS,
+    Understanding,
+    heuristic,
+    is_injection,
+    merge_slots,
+    router_messages,
+)
+from app.core.config import get_settings
 from app.core.queue import Queue
 from app.db.session import tenant_session
-from app.llm import LLM
+from app.llm import LLM, LLMError
 from app.models import Conversation
 from app.search.types import SearchML
 
@@ -65,10 +75,58 @@ class AgentNodes:
         return {"trace": step(state, "transcribe", skipped="шаг 8")}
 
     async def guard_in(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "guard_in", human_mode=bool(state.get("human_mode")))}
+        text = last_human(state)
+        flagged = is_injection(text) or len(text) > MAX_INPUT_CHARS
+        return {
+            "flagged": flagged,
+            "trace": step(
+                state, "guard_in", human_mode=bool(state.get("human_mode")), flagged=flagged
+            ),
+        }
 
     async def understand(self, state: ChatState) -> dict[str, Any]:
-        return {"intent": "smalltalk", "lang": "ru", "trace": step(state, "understand")}
+        text = last_human(state)[:MAX_INPUT_CHARS]
+        usage = list(state.get("usage", []))
+        source = "llm"
+        if state.get("flagged"):
+            result = heuristic(text).model_copy(update={"intent": "offtopic"})
+            source = "guard"
+        elif self.deps.llm is None:
+            result, source = heuristic(text), "heuristic"
+        else:
+            try:
+                response, entry = await call_llm(
+                    self.deps.llm,
+                    "understand",
+                    get_settings().llm_model_router,
+                    router_messages(state.get("messages", []), text),
+                    schema=Understanding,
+                )
+                usage.append(entry)
+                if not isinstance(response.parsed, Understanding):
+                    raise LLMError("understand: нет structured output")
+                result = response.parsed
+            except LLMError as exc:
+                log.warning("agent.understand_failed", error=str(exc))
+                result, source = heuristic(text), "heuristic"
+        slots = merge_slots(state.get("slots"), result.slots)
+        return {
+            "lang": result.lang,
+            "intent": result.intent,
+            "complexity": result.complexity,
+            "slots": slots,
+            "search_query": result.search_query or text,
+            "usage": usage,
+            "trace": step(
+                state,
+                "understand",
+                source=source,
+                lang=result.lang,
+                intent=result.intent,
+                complexity=result.complexity,
+                slots=slots,
+            ),
+        }
 
     async def retrieve(self, state: ChatState) -> dict[str, Any]:
         return {"trace": step(state, "retrieve")}

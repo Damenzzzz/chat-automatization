@@ -1,11 +1,15 @@
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.agent.understand import Understanding
+from app.llm.fake import FakeLLM
 from tests.agent_helpers import make_agent, make_conversation, nodes
 
 
 async def test_smalltalk_path(owner_engine: AsyncEngine) -> None:
     tenant_id, conversation_id = await make_conversation(owner_engine)
-    agent, _ = await make_agent()
+    agent, _ = await make_agent(
+        FakeLLM([Understanding(lang="ru", intent="smalltalk", complexity="low")])
+    )
     result = await agent.run(tenant_id=tenant_id, conversation_id=conversation_id, text="привет")
     assert result.reply
     assert nodes(result.trace) == [
