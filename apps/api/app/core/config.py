@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     ml_timeout: float = 120.0
     ml_max_retries: int = 3
 
+    search_candidates: int = 50
+    search_rrf_k: int = 60
+    search_rerank_top: int = 30
+    search_ef_search: int = 100
+
     catalog_max_upload_bytes: int = 20 * 1024 * 1024
     catalog_max_rows: int = 50_000
 
