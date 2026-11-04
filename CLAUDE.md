@@ -27,6 +27,7 @@ make up                 # все сервисы, ждёт healthcheck
 make migrate            # alembic upgrade head внутри контейнера api
 make seed               # демо-магазин «Цветы Пион»: 30 товаров и база знаний
 make admin ARGS="--email you@satushy.kz"   # админ Satushy
+make eval               # качество поиска: Qwen3 против BGE-M3
 make test               # pytest api + ml; тесты api пересоздают базу satushy_test в docker-postgres
 make lint               # ruff, mypy, eslint, prettier, tsc
 make fmt                # автоформат
@@ -72,6 +73,16 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Тесты на настоящих моделях: `ML_REAL_MODELS=1` (в CI пропускаются); гонять в отдельном контейнере при остановленном `ml`, иначе не хватит памяти.
 - В API: `app.mlclient.get_ml_client()`; батчи по 64, ретраи на 429/5xx/сетевые ошибки.
 - `reindex_embeddings(tenant_id)` (ARQ) эмбеддит products и kb_chunks с `embedding_stale` или без вектора и снимает флаг, только если строку не меняли во время расчёта (проверка `updated_at`). Ставится после импорта каталога и `make seed`, плюс cron `reindex_all` раз в 10 минут. Текст товара — `app/catalog/embedding_text.py`: без цены и остатка.
+
+## Поиск
+
+- `app.search`: `search_products(session, query, filters)` → топ-5 товаров с ценой и остатком из БД; `search_kb(session, query)` → топ-3 куска базы знаний. Вызывать внутри `tenant_session` / `TenantDb`.
+- Конвейер: три списка по 50 — vector (pgvector cosine, `hnsw.iterative_scan = relaxed_order`), fts (`websearch_to_tsquery` russian + simple, слова через ИЛИ), sku (точно и триграммы по `sku_norm`, только если в запросе есть похожий на артикул токен) → RRF (k = 60) → фильтры → реранкер по топ-30 → топ-5. Точное совпадение артикула всегда первое.
+- Фильтры `ProductFilters(price_min, price_max, in_stock, category)` стоят и в SQL кандидатов, и повторно после слияния. `in_stock` пропускает неизвестный остаток (`NULL`), но не `0`.
+- ML недоступен → поиск работает без вектора и реранкера (fts + sku, порядок RRF).
+- Каждый поиск пишется в `search_log` (`kind`, `lang`, `result_count`, `has_in_stock`, `latency_ms`); отладка — `record=False`. Язык — эвристика `app/search/lang.py`, роутер LLM может передать свой.
+- `GET /debug/search?q=&tenant_id=` (только admin) — кандидаты, ранги в каждом списке, RRF, оценки реранкера.
+- Качество: `make eval` (Qwen3 и BGE-M3 по очереди, переиндексация демо-магазина) → `apps/api/eval/results/<дата>.md`. Набор — `apps/api/eval/queries.jsonl`, 60 запросов (ru 30, kk 15, смесь 15).
 
 ## Модели
 
