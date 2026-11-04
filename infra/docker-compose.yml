@@ -117,6 +117,9 @@ services:
   ml:
     build: ../apps/ml
     <<: *app-env
+    environment:
+      ML_EMBEDDER: ${ML_EMBEDDER:-qwen3}
+      ML_RERANKER: ${ML_RERANKER:-qwen3}
     restart: unless-stopped
     ports:
       - "${ML_PORT:-8001}:8001"

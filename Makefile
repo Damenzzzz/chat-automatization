@@ -8,7 +8,7 @@ API := cd apps/api &&
 ML := cd apps/ml &&
 WEB := cd apps/web &&
 
-.PHONY: help up down logs ps migrate seed admin test lint fmt install
+.PHONY: help up down logs ps migrate seed admin eval test lint fmt install
 
 help: ## Список команд
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -39,6 +39,15 @@ seed: ## Демо-магазин «Цветы Пион» (нужен make migrat
 
 admin: ## Админ Satushy: make admin ARGS="--email you@satushy.kz"
 	$(COMPOSE) exec api python -m app.cli create-admin $(ARGS)
+
+EVAL_MODELS ?= qwen3 bge-m3
+
+eval: ## Качество поиска по моделям EVAL_MODELS → apps/api/eval/results
+	@for m in $(EVAL_MODELS); do \
+		ML_EMBEDDER=$$m ML_RERANKER=$$m $(COMPOSE) up -d --wait ml && \
+		$(COMPOSE) exec -T api python -m scripts.eval_search --label $$m || exit 1; \
+	done
+	$(COMPOSE) up -d --wait ml
 
 test: ## Тесты api (нужен make up — postgres) и ml
 	$(API) uv run pytest

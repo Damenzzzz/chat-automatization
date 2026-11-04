@@ -51,7 +51,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # кириллица в строках 
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["app", "tests", "migrations"]
+files = ["app", "tests", "migrations", "scripts"]
 
 [[tool.mypy.overrides]]
 module = ["arq.*", "boto3.*", "botocore.*"]

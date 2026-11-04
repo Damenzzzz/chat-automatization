@@ -1,0 +1,60 @@
+{"id": 1, "lang": "ru", "query": "есть розовые пионы?", "expected": ["PN-001", "PN-005", "PN-003"]}
+{"id": 2, "lang": "ru", "query": "белые пионы", "expected": ["PN-002"]}
+{"id": 3, "lang": "ru", "query": "коралловые пионы", "expected": ["PN-004"]}
+{"id": 4, "lang": "ru", "query": "пионы в коробке", "expected": ["PN-005"]}
+{"id": 5, "lang": "ru", "query": "букет из красных роз", "expected": ["RS-101", "RS-106"]}
+{"id": 6, "lang": "ru", "query": "51 роза", "expected": ["RS-102"]}
+{"id": 7, "lang": "ru", "query": "сколько стоит 101 роза", "expected": ["RS-103"]}
+{"id": 8, "lang": "ru", "query": "кустовые розы", "expected": ["RS-104", "CP-501", "MX-302"]}
+{"id": 9, "lang": "ru", "query": "белые розы на свадьбу", "expected": ["RS-105", "MX-306"]}
+{"id": 10, "lang": "ru", "query": "розы в коробке в форме сердца", "expected": ["RS-106"]}
+{"id": 11, "lang": "ru", "query": "тюльпаны", "expected": ["TL-201", "TL-202", "TL-203"]}
+{"id": 12, "lang": "ru", "query": "белые тюльпаны", "expected": ["TL-203"]}
+{"id": 13, "lang": "ru", "query": "тюльпаны на 8 марта", "expected": ["TL-201", "TL-202"]}
+{"id": 14, "lang": "ru", "query": "подсолнухи есть?", "expected": ["MX-303"]}
+{"id": 15, "lang": "ru", "query": "что подарить маме", "expected": ["MX-304"]}
+{"id": 16, "lang": "ru", "query": "букет для невесты", "expected": ["MX-306"]}
+{"id": 17, "lang": "ru", "query": "бутоньерка жениху", "expected": ["MX-307"]}
+{"id": 18, "lang": "ru", "query": "ромашки", "expected": ["CH-401", "MX-303"]}
+{"id": 19, "lang": "ru", "query": "хризантемы", "expected": ["CH-402", "MX-304", "CP-502"]}
+{"id": 20, "lang": "ru", "query": "лаванда", "expected": ["CH-403"]}
+{"id": 21, "lang": "ru", "query": "голубая гортензия", "expected": ["MX-305"]}
+{"id": 22, "lang": "ru", "query": "корзина с цветами", "expected": ["CP-502"]}
+{"id": 23, "lang": "ru", "query": "цветы со сладостями на день рождения", "expected": ["CP-503"]}
+{"id": 24, "lang": "ru", "query": "можно добавить открытку?", "expected": ["GF-601"]}
+{"id": 25, "lang": "ru", "query": "воздушные шарики", "expected": ["GF-602"]}
+{"id": 26, "lang": "ru", "query": "плюшевый мишка", "expected": ["GF-603"]}
+{"id": 27, "lang": "ru", "query": "букет на годовщину", "expected": ["RS-101", "RS-106", "RS-102"]}
+{"id": 28, "lang": "ru", "query": "недорогие цветы в коробке", "expected": ["CP-501", "RS-106", "PN-005"]}
+{"id": 29, "lang": "ru", "query": "нежный букет в пастельных тонах", "expected": ["MX-301", "MX-302"]}
+{"id": 30, "lang": "ru", "query": "артикул PN-004", "expected": ["PN-004"]}
+{"id": 31, "lang": "kk", "query": "қызыл раушан гүлдері бар ма?", "expected": ["RS-101"]}
+{"id": 32, "lang": "kk", "query": "ақ пиондар бар ма", "expected": ["PN-002"]}
+{"id": 33, "lang": "kk", "query": "қызғалдақ шоғы қанша тұрады", "expected": ["TL-201", "TL-202"]}
+{"id": 34, "lang": "kk", "query": "ақ қызғалдақ", "expected": ["TL-203"]}
+{"id": 35, "lang": "kk", "query": "анама гүл керек", "expected": ["MX-304"]}
+{"id": 36, "lang": "kk", "query": "қалыңдыққа гүл шоғы", "expected": ["MX-306"]}
+{"id": 37, "lang": "kk", "query": "51 раушан бағасы", "expected": ["RS-102"]}
+{"id": 38, "lang": "kk", "query": "түймедақ гүлдері", "expected": ["CH-401", "MX-303"]}
+{"id": 39, "lang": "kk", "query": "күнбағыс бар ма", "expected": ["MX-303"]}
+{"id": 40, "lang": "kk", "query": "қораптағы гүлдер", "expected": ["PN-005", "CP-501"]}
+{"id": 41, "lang": "kk", "query": "жүрек пішінді қораптағы раушандар", "expected": ["RS-106"]}
+{"id": 42, "lang": "kk", "query": "ойыншық аю сатасыз ба", "expected": ["GF-603"]}
+{"id": 43, "lang": "kk", "query": "лаванда шоғы бар ма", "expected": ["CH-403"]}
+{"id": 44, "lang": "kk", "query": "туған күнге тәтті сыйлық", "expected": ["CP-503"]}
+{"id": 45, "lang": "kk", "query": "маржан түсті пиондар", "expected": ["PN-004"]}
+{"id": 46, "lang": "mixed", "query": "пионы маме до 12к", "expected": ["MX-304", "PN-003"]}
+{"id": 47, "lang": "mixed", "query": "пион гүлі", "expected": ["PN-001", "PN-002", "PN-003", "PN-004", "PN-005"]}
+{"id": 48, "lang": "mixed", "query": "пеоны розовые", "expected": ["PN-001"]}
+{"id": 49, "lang": "mixed", "query": "тюлпаны 25 штук", "expected": ["TL-201"]}
+{"id": 50, "lang": "mixed", "query": "51 роза бар ма", "expected": ["RS-102"]}
+{"id": 51, "lang": "mixed", "query": "хризантема бар ма", "expected": ["CH-402"]}
+{"id": 52, "lang": "mixed", "query": "ромашка шоғы", "expected": ["CH-401"]}
+{"id": 53, "lang": "mixed", "query": "мама үшін букет", "expected": ["MX-304"]}
+{"id": 54, "lang": "mixed", "query": "гартензия", "expected": ["MX-305"]}
+{"id": 55, "lang": "mixed", "query": "свадебный букет қалыңдыққа", "expected": ["MX-306"]}
+{"id": 56, "lang": "mixed", "query": "қызыл розы в коробке", "expected": ["RS-106"]}
+{"id": 57, "lang": "mixed", "query": "лавенда букет", "expected": ["CH-403"]}
+{"id": 58, "lang": "mixed", "query": "шарики и открытка", "expected": ["GF-602", "GF-601"]}
+{"id": 59, "lang": "mixed", "query": "pn 001 бар ма", "expected": ["PN-001"]}
+{"id": 60, "lang": "mixed", "query": "мишка ойыншық қосып беріңіз", "expected": ["GF-603"]}
