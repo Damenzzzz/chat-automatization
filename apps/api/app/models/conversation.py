@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -10,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -55,6 +57,7 @@ class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):
     )
     mode: Mapped[str] = mapped_column(String(8), server_default="bot")
     status: Mapped[str] = mapped_column(String(8), server_default="open")
+    sandbox: Mapped[bool] = mapped_column(Boolean, server_default=sql_text("false"))
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -76,6 +79,9 @@ class Message(IdMixin, TimestampMixin, TenantMixin, Base):
     tokens_in: Mapped[int | None] = mapped_column(Integer)
     tokens_out: Mapped[int | None] = mapped_column(Integer)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
+    cached_tokens: Mapped[int | None] = mapped_column(Integer)
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    trace: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class Lead(IdMixin, TimestampMixin, TenantMixin, Base):

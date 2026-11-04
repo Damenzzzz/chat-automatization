@@ -1,11 +1,12 @@
 import time
 import uuid
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from app.agent.graph import MAX_RETRIES, MAX_TOOL_HOPS
 from app.agent.guard import check_reply
@@ -26,7 +27,7 @@ from app.core.config import get_settings
 from app.core.queue import Queue
 from app.db.session import tenant_session
 from app.llm import LLM, LLMError, ToolCall
-from app.models import Conversation
+from app.models import Conversation, Message, Unanswered
 from app.search.types import SearchML
 
 log = structlog.get_logger()
@@ -55,13 +56,27 @@ class AgentNodes:
         return uuid.UUID(state["tenant_id"])
 
     async def ingest(self, state: ChatState) -> dict[str, Any]:
+        conversation_id = uuid.UUID(state["conversation_id"])
+        text = last_human(state)
         async with tenant_session(self.tenant(state)) as session:
             mode = await session.scalar(
-                select(Conversation.mode).where(
-                    Conversation.id == uuid.UUID(state["conversation_id"])
+                select(Conversation.mode).where(Conversation.id == conversation_id)
+            )
+            session.add(
+                Message(
+                    tenant_id=self.tenant(state),
+                    conversation_id=conversation_id,
+                    role="customer",
+                    content=text or None,
+                    media={"audio_url": state["audio_url"]} if state.get("audio_url") else None,
                 )
             )
-        reset: dict[str, Any] = {
+            await session.execute(
+                update(Conversation)
+                .where(Conversation.id == conversation_id)
+                .values(last_message_at=func.now())
+            )
+        return {
             "human_mode": mode == "human",
             "context": [],
             "tool_hops": 0,
@@ -72,9 +87,8 @@ class AgentNodes:
             "reply": None,
             "flagged": False,
             "started_at": time.time(),
+            "trace": [{"node": "ingest", "mode": mode}],
         }
-        reset["trace"] = [{"node": "ingest", "mode": mode}]
-        return reset
 
     async def transcribe(self, state: ChatState) -> dict[str, Any]:
         return {"trace": step(state, "transcribe", skipped="шаг 8")}
@@ -325,5 +339,51 @@ class AgentNodes:
         last = state["messages"][-1]
         return {"reply": str(last.content), "trace": step(state, "send", stub="шаг 8")}
 
+    def unanswered(self, state: ChatState) -> bool:
+        if any(t["node"] in ("fallback",) for t in state.get("trace", [])):
+            return True
+        if any(t.get("source") == "no_llm" for t in state.get("trace", [])):
+            return True
+        found = any(c["type"] in ("product", "kb") for c in state.get("context", []))
+        return state.get("intent") in ("product", "policy") and not found
+
     async def meter(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "meter")}
+        usage = state.get("usage", [])
+        unanswered = self.unanswered(state)
+        trace = step(state, "meter", unanswered=unanswered, sandbox=bool(state.get("sandbox")))
+        replies = [u for u in usage if u["node"] == "respond"]
+        cost = sum((Decimal(u["cost_usd"]) for u in usage if u.get("cost_usd")), Decimal(0))
+        latency = round((time.time() - state.get("started_at", time.time())) * 1000)
+        conversation_id = uuid.UUID(state["conversation_id"])
+        reply = state.get("reply")
+        async with tenant_session(self.tenant(state)) as session:
+            session.add(
+                Message(
+                    tenant_id=self.tenant(state),
+                    conversation_id=conversation_id,
+                    role="bot",
+                    content=reply,
+                    model=replies[-1]["model"] if replies else None,
+                    tokens_in=sum(u["tokens_in"] for u in usage),
+                    tokens_out=sum(u["tokens_out"] for u in usage),
+                    cached_tokens=sum(u["cached_tokens"] for u in usage),
+                    cost_usd=cost,
+                    latency_ms=latency,
+                    trace={
+                        "lang": state.get("lang"),
+                        "intent": state.get("intent"),
+                        "steps": trace,
+                        "llm_calls": usage,
+                    },
+                )
+            )
+            if unanswered:
+                session.add(
+                    Unanswered(
+                        tenant_id=self.tenant(state),
+                        conversation_id=conversation_id,
+                        question=last_human(state),
+                        answer=reply,
+                    )
+                )
+        return {"trace": trace}
