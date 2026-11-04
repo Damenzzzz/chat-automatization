@@ -18,6 +18,8 @@ from app.search.candidates import (
     vector_products,
 )
 from app.search.fusion import Fused, rrf
+from app.search.lang import detect_lang
+from app.search.log import record_search
 from app.search.types import ProductFilters, ProductHit, SearchML, SearchResult
 
 log = structlog.get_logger()
@@ -90,6 +92,9 @@ async def search_products(
     ml: SearchML | None = None,
     limit: int = 5,
     use_reranker: bool = True,
+    lang: str | None = None,
+    conversation_id: uuid.UUID | None = None,
+    record: bool = True,
 ) -> SearchResult[ProductHit]:
     started = time.perf_counter()
     settings = get_settings()
@@ -123,9 +128,23 @@ async def search_products(
         ranked.sort(key=lambda item: -(item[1] or 0.0))
     ranked.sort(key=lambda item: item[0].id not in exact)
     hits = [_hit(products[f.id], f, score) for f, score in ranked[:limit]]
+    lang = lang or detect_lang(query)
+    latency_ms = round((time.perf_counter() - started) * 1000)
+    if record:
+        await record_search(
+            session,
+            tenant_id,
+            kind="product",
+            query=query,
+            lang=lang,
+            items=hits,
+            latency_ms=latency_ms,
+            filters=filters,
+            conversation_id=conversation_id,
+        )
     return SearchResult(
         items=hits,
-        lang=None,
-        latency_ms=round((time.perf_counter() - started) * 1000),
+        lang=lang,
+        latency_ms=latency_ms,
         candidates={name: len(ids) for name, ids in lists.items()},
     )

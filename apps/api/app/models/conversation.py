@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -109,7 +110,11 @@ class Unanswered(IdMixin, TimestampMixin, TenantMixin, Base):
 
 class SearchLog(IdMixin, TimestampMixin, TenantMixin, Base):
     __tablename__ = "search_log"
-    __table_args__ = (CheckConstraint(f"lang IN {LANGS}", name="lang"),)
+    __table_args__ = (
+        CheckConstraint(f"lang IN {LANGS}", name="lang"),
+        CheckConstraint("kind IN ('product', 'kb')", name="kind"),
+        Index("ix_search_log_tenant_id_created_at", "tenant_id", "created_at"),
+    )
 
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("conversations.id", ondelete="SET NULL"), index=True
@@ -119,3 +124,6 @@ class SearchLog(IdMixin, TimestampMixin, TenantMixin, Base):
     filters: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=sql_text("'{}'::jsonb"))
     results: Mapped[list[Any]] = mapped_column(JSONB, server_default=sql_text("'[]'::jsonb"))
     latency_ms: Mapped[int | None] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16), server_default="product")
+    result_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    has_in_stock: Mapped[bool | None] = mapped_column(Boolean)
