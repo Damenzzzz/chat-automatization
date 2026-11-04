@@ -84,6 +84,19 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - `GET /debug/search?q=&tenant_id=` (только admin) — кандидаты, ранги в каждом списке, RRF, оценки реранкера.
 - Качество: `make eval` (Qwen3 и BGE-M3 по очереди, переиндексация демо-магазина) → `apps/api/eval/results/<дата>.md`. Набор — `apps/api/eval/queries.jsonl`, 60 запросов (ru 30, kk 15, смесь 15).
 
+## Бот (LangGraph)
+
+- `app/agent`: граф из SPEC.md — ingest → (transcribe) → guard_in → understand → retrieve | kb | order | handoff | respond → respond ⇄ tools (≤ 3) → guard_out → send | respond (1 повтор) | fallback → meter. Переходы — `graph.py`, узлы — `nodes.py`, запуск — `Agent.run(...)` в `runtime.py` (`get_agent` для FastAPI).
+- Чекпоинтер — `AsyncPostgresSaver`, `thread_id = conversation_id`, таблицы в схеме `agent_state` ([ADR 0004](docs/adr/0004-agent-checkpoints-schema.md)). Поля хода (`context`, `usage`, `trace`, `tool_hops`, `retries`) сбрасывает `ingest`.
+- `understand` — `LLM_MODEL_ROUTER`, `Understanding` (lang, intent, complexity, slots, search_query); без LLM — эвристика. Инъекции в промпт → `offtopic` без вызова модели.
+- `respond` — системный промпт из активного `bot_profiles` (`prompt.py`) стоит первым и не меняется между сообщениями; всё динамическое (язык, найденные товары, база знаний, подсказка повтора) — блок «Данные для ответа» в последнем сообщении покупателя. Модель — `LLM_MODEL_REPLY`, при `complexity = high` или диалоге > 12 сообщений — `LLM_MODEL_COMPLEX`.
+- Инструменты (`tools.py`): search_products, get_product, search_kb, create_lead (цены из БД, `leads` + ARQ `notify_manager`), handoff (`conversations.mode = human`). Подписи вызовов Gemini 3 (`thoughtSignature`) хранятся в `AIMessage.additional_kwargs` и возвращаются модели.
+- `guard_out` (`guard.py`): каждая сумма в ответе (₸, тг, тыс., к) = цена из context, сумма до 4 таких цен, число из профиля бота, базы знаний или сообщения покупателя; артикулы — только из найденных товаров. Не прошло → удаление ответа и 1 повтор с подсказкой → шаблон «уточню у менеджера» + handoff.
+- `meter`: сообщение покупателя пишет `ingest`, ответ бота — `meter` (model, суммы tokens_in/out/cached, cost_usd, latency_ms хода, `trace = {steps, llm_calls}`). Не нашли ни товаров, ни базы знаний или сработал fallback → `unanswered`.
+- Песочница: `POST /sandbox/chat {message, session_id}` (тот же граф, `conversations.sandbox = true`, без уведомлений и журнала поиска), `POST /sandbox/autotest {count}` — вопросы по каталогу и базе знаний, прогон, судья `LLM_MODEL_REPLY`.
+- Профиль бота: `GET/PUT /bot-profile`, `GET /bot-profile/versions`, `POST /bot-profile/rollback {version?}`. Каждое сохранение и откат — новая версия, активна ровно одна.
+- В тестах — `FakeLLM` (сценарий по порядку вызовов) и `tests/agent_helpers.py` (`make_conversation`, `make_agent`).
+
 ## Модели
 
 | Задача | Модель | Где |
