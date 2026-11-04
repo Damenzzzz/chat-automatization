@@ -77,6 +77,14 @@ def database() -> None:
     command.upgrade(alembic_config(), "head")
 
 
+@pytest.fixture(scope="session", autouse=True)
+async def _checkpointer_pool() -> AsyncIterator[None]:
+    yield
+    from app.agent.checkpoint import close_checkpointer
+
+    await close_checkpointer()
+
+
 @pytest.fixture
 async def owner_engine(database: None) -> AsyncIterator[AsyncEngine]:
     engine = create_async_engine(OWNER_URL, poolclass=NullPool)
