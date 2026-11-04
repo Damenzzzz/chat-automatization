@@ -140,7 +140,8 @@ async def test_retrieve_node_puts_products_in_context(
                 complexity="low",
                 slots=Slots(sku="RS-101"),
                 search_query="пионы",
-            )
+            ),
+            "Ответ",
         ]
     )
     agent, _ = await make_agent(llm)
@@ -154,7 +155,7 @@ async def test_handoff_intent_switches_mode(
     shop: tuple[uuid.UUID, uuid.UUID], owner_engine: AsyncEngine
 ) -> None:
     tenant_id, conversation_id = shop
-    llm = FakeLLM([Understanding(lang="ru", intent="human", complexity="low")])
+    llm = FakeLLM([Understanding(lang="ru", intent="human", complexity="low"), "Зову менеджера"])
     agent, queue = await make_agent(llm)
     result = await agent.run(tenant_id=tenant_id, conversation_id=conversation_id, text="менеджер")
     assert result.human_mode

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import random
 import time
 from collections.abc import Awaitable, Callable, Sequence
@@ -33,13 +34,39 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, TimeoutError | httpx.TransportError)
 
 
+def _tool_response(m: Message) -> gt.Part:
+    try:
+        payload = json.loads(m.text)
+    except ValueError:
+        payload = {"result": m.text}
+    if not isinstance(payload, dict):
+        payload = {"result": payload}
+    return gt.Part.from_function_response(name=m.tool_name or "", response=payload)
+
+
 def _contents(messages: Sequence[Message]) -> tuple[str | None, list[gt.Content]]:
     system = "\n\n".join(m.text for m in messages if m.role == "system") or None
-    contents = [
-        gt.Content(role=m.role, parts=[gt.Part(text=m.text)])
-        for m in messages
-        if m.role != "system"
-    ]
+    contents: list[gt.Content] = []
+    for m in messages:
+        if m.role == "system":
+            continue
+        if m.role == "tool":
+            part = _tool_response(m)
+            last = contents[-1] if contents else None
+            if last and last.role == "user" and last.parts and last.parts[0].function_response:
+                last.parts.append(part)
+            else:
+                contents.append(gt.Content(role="user", parts=[part]))
+            continue
+        parts = [gt.Part(text=m.text)] if m.text else []
+        parts += [
+            gt.Part(
+                function_call=gt.FunctionCall(name=c.name, args=c.args, id=c.id),
+                thought_signature=c.signature,
+            )
+            for c in m.tool_calls
+        ]
+        contents.append(gt.Content(role=m.role, parts=parts or [gt.Part(text="")]))
     return system, contents
 
 
@@ -62,7 +89,14 @@ def parse_response(
     for part in (candidate.content.parts or []) if candidate and candidate.content else []:
         if part.function_call and part.function_call.name:
             fc = part.function_call
-            calls.append(ToolCall(name=fc.name or "", args=dict(fc.args or {}), id=fc.id))
+            calls.append(
+                ToolCall(
+                    name=fc.name or "",
+                    args=dict(fc.args or {}),
+                    id=fc.id,
+                    signature=part.thought_signature,
+                )
+            )
         elif part.text and not part.thought:
             texts.append(part.text)
     text = "".join(texts)

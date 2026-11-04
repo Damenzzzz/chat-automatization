@@ -7,9 +7,12 @@ import structlog
 from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import select
 
+from app.agent.graph import MAX_RETRIES, MAX_TOOL_HOPS
 from app.agent.llmcall import call_llm
+from app.agent.prompt import load_profile
+from app.agent.respond import FALLBACK, ai_message, build_messages, pick_model, tool_message
 from app.agent.state import ChatState, step
-from app.agent.tools import ToolBox, merge_context
+from app.agent.tools import TOOLS, ToolBox, merge_context
 from app.agent.understand import (
     MAX_INPUT_CHARS,
     Understanding,
@@ -21,7 +24,7 @@ from app.agent.understand import (
 from app.core.config import get_settings
 from app.core.queue import Queue
 from app.db.session import tenant_session
-from app.llm import LLM, LLMError
+from app.llm import LLM, LLMError, ToolCall
 from app.models import Conversation
 from app.search.types import SearchML
 
@@ -179,11 +182,111 @@ class AgentNodes:
         await self.toolbox(state).handoff("покупатель попросил менеджера")
         return {"human_mode": True, "trace": step(state, "handoff", reason="intent=human")}
 
+    def notes(self, state: ChatState, retry: bool) -> list[str]:
+        notes = []
+        intent, context = state.get("intent"), state.get("context", [])
+        if state.get("flagged") or intent == "offtopic":
+            notes.append(
+                "Вопрос не о магазине. Вежливо откажи одной фразой и предложи помочь с выбором"
+                " товара или заказом."
+            )
+        if state.get("human_mode"):
+            notes.append("Диалог передан менеджеру: скажи, что менеджер скоро подключится.")
+        if intent == "product" and not any(c["type"] == "product" for c in context):
+            notes.append(
+                "В каталоге ничего не нашлось. Не выдумывай товары: предложи уточнить запрос"
+                " или позвать менеджера."
+            )
+        if intent == "policy" and not any(c["type"] == "kb" for c in context):
+            notes.append("В базе знаний ответа нет. Не выдумывай: предложи уточнить у менеджера.")
+        if state.get("tool_hops", 0) >= MAX_TOOL_HOPS:
+            notes.append("Инструменты больше недоступны: ответь по уже найденным данным.")
+        if retry:
+            notes.append(
+                "Прошлый вариант ответа не прошёл проверку: "
+                + "; ".join(state.get("check_errors", []))
+                + ". Перепиши ответ, используя только цены и артикулы из данных выше."
+            )
+        return notes
+
     async def respond(self, state: ChatState) -> dict[str, Any]:
-        return {"messages": [AIMessage("Здравствуйте!")], "trace": step(state, "respond")}
+        lang = state.get("lang", "ru")
+        retry = bool(state.get("check_errors")) and state.get("retries", 0) < MAX_RETRIES
+        retries = state.get("retries", 0) + (1 if retry else 0)
+        if self.deps.llm is None:
+            return {
+                "messages": [AIMessage(FALLBACK.get(lang, FALLBACK["ru"]))],
+                "retries": retries,
+                "trace": step(state, "respond", source="no_llm"),
+            }
+        async with tenant_session(self.tenant(state)) as session:
+            profile = await load_profile(session, self.tenant(state))
+        history = state.get("messages", [])
+        model = pick_model(get_settings(), state.get("complexity"), history)
+        hops = state.get("tool_hops", 0)
+        prompt = build_messages(
+            profile,
+            history,
+            lang=lang,
+            intent=state.get("intent"),
+            slots=state.get("slots"),
+            context=state.get("context", []),
+            notes=self.notes(state, retry),
+        )
+        usage = list(state.get("usage", []))
+        try:
+            response, entry = await call_llm(
+                self.deps.llm,
+                "respond",
+                model,
+                prompt,
+                tools=TOOLS if hops < MAX_TOOL_HOPS else None,
+            )
+        except LLMError as exc:
+            log.warning("agent.respond_failed", error=str(exc))
+            return {
+                "messages": [AIMessage("")],
+                "retries": retries,
+                "trace": step(state, "respond", model=model, error=str(exc)),
+            }
+        usage.append(entry)
+        message = ai_message(response)
+        return {
+            "messages": [message],
+            "retries": retries,
+            "usage": usage,
+            "trace": step(
+                state,
+                "respond",
+                model=model,
+                retry=retry,
+                profile_version=profile.version,
+                tool_calls=[c["name"] for c in message.tool_calls],
+            ),
+        }
 
     async def tools(self, state: ChatState) -> dict[str, Any]:
-        return {"tool_hops": state.get("tool_hops", 0) + 1, "trace": step(state, "tools")}
+        last = state["messages"][-1]
+        box = self.toolbox(state)
+        context = list(state.get("context", []))
+        human_mode = bool(state.get("human_mode"))
+        replies, calls = [], []
+        for call in getattr(last, "tool_calls", []):
+            outcome = await box.run(ToolCall(call["name"], dict(call["args"])))
+            replies.append(tool_message(call["id"], call["name"], outcome.result))
+            context = merge_context(context, outcome.context)
+            human_mode = human_mode or outcome.human_mode
+            calls.append(
+                {"name": call["name"], "args": call["args"], "ok": "error" not in outcome.result}
+            )
+        hops = state.get("tool_hops", 0) + 1
+        return {
+            "messages": replies,
+            "context": context,
+            "human_mode": human_mode,
+            "tool_hops": hops,
+            "trace": step(state, "tools", hop=hops, calls=calls),
+        }
 
     async def guard_out(self, state: ChatState) -> dict[str, Any]:
         return {"check_ok": True, "trace": step(state, "guard_out")}

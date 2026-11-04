@@ -4,13 +4,7 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
-Role = Literal["system", "user", "model"]
-
-
-@dataclass(frozen=True)
-class Message:
-    role: Role
-    text: str
+Role = Literal["system", "user", "model", "tool"]
 
 
 @dataclass(frozen=True)
@@ -25,6 +19,15 @@ class ToolCall:
     name: str
     args: dict[str, Any]
     id: str | None = None
+    signature: bytes | None = None
+
+
+@dataclass(frozen=True)
+class Message:
+    role: Role
+    text: str
+    tool_calls: tuple[ToolCall, ...] = ()
+    tool_name: str | None = None
 
 
 @dataclass(frozen=True)

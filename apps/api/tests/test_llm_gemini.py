@@ -138,3 +138,33 @@ async def test_timeout_is_retried() -> None:
     llm, _ = _llm(models, llm_timeout=0.05)
 
     assert (await llm.generate("gemini-3.5-flash-lite", USER)).text == "ok"
+
+
+async def test_tool_round_trip_keeps_thought_signature() -> None:
+    call = gt.Part(
+        function_call=gt.FunctionCall(name="get_product", args={"sku": "PN-001"}),
+        thought_signature=b"sig-a",
+    )
+    models = FakeModels(_response(call), _response(gt.Part(text="32 000 ₸")))
+    llm, _ = _llm(models)
+
+    first = await llm.generate("gemini-3.5-flash-lite", USER)
+    assert first.tool_calls[0].signature == b"sig-a"
+
+    history = [
+        *USER,
+        Message("model", "", tool_calls=tuple(first.tool_calls)),
+        Message("tool", '{"price": 32000}', tool_name="get_product"),
+        Message("tool", "не json", tool_name="search_kb"),
+    ]
+    await llm.generate("gemini-3.5-flash-lite", history)
+
+    contents = models.calls[1]["contents"]
+    assert [c.role for c in contents] == ["user", "model", "user"]
+    model_part = contents[1].parts[0]
+    assert model_part.function_call.name == "get_product"
+    assert model_part.thought_signature == b"sig-a"
+    responses = [p.function_response for p in contents[2].parts]
+    assert responses[0].name == "get_product"
+    assert responses[0].response == {"price": 32000}
+    assert responses[1].response == {"result": "не json"}
