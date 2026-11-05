@@ -188,9 +188,7 @@ function Banners() {
       )}
       {isOwner && shop?.status === "onboarding" && pathname !== "/setup" && (
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line bg-mist px-4 py-2.5 text-sm sm:px-8">
-          <span>
-            Настройка магазина не закончена, поэтому бот пока не готов к работе с покупателями.
-          </span>
+          <span>Настройка магазина не закончена.</span>
           <Link
             href={`/setup?step=${shop.onboarding_step}`}
             className="font-medium underline underline-offset-2"

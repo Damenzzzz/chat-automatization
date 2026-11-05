@@ -1,139 +1,22 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useSWRConfig } from "swr";
 
-import { NICHES } from "@/components/auth/auth-flow";
 import { Autotest, SandboxChat } from "@/components/bot/sandbox";
 import { ProfileForm } from "@/components/bot/profile-form";
 import { CatalogImport } from "@/components/catalog/catalog-import";
 import { ChannelsPanel } from "@/components/channels/channels-panel";
 import { useSession } from "@/components/shell/session";
+import { BusinessForm } from "@/components/shop/business-form";
 import { Button } from "@/components/ui/button";
-import { SelectField, TextField } from "@/components/ui/field";
 import { FormError, Loading, Page } from "@/components/ui/page";
 import { Stepper } from "@/components/ui/stepper";
-import { api, type Schemas } from "@/lib/api/client";
+import { api } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/errors";
 
 const STEPS = ["Бизнес", "Товары", "Характер бота", "Песочница", "Каналы"];
-
-function BusinessStep({
-  shop,
-  onDone,
-}: {
-  shop: Schemas["ShopOut"];
-  onDone: (shop: Schemas["ShopOut"]) => void;
-}) {
-  const [name, setName] = useState(shop.name);
-  const [niche, setNiche] = useState(shop.niche ?? "");
-  const [city, setCity] = useState(shop.city ?? "");
-  const [links, setLinks] = useState({
-    instagram: shop.links.instagram ?? "",
-    website: shop.links.website ?? "",
-    two_gis: shop.links.two_gis ?? "",
-    kaspi: shop.links.kaspi ?? "",
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const saved = await unwrap(
-        api.PATCH("/shop", {
-          body: {
-            name: name.trim(),
-            niche: niche || null,
-            city: city.trim() || null,
-            links: {
-              instagram: links.instagram.trim() || null,
-              website: links.website.trim() || null,
-              two_gis: links.two_gis.trim() || null,
-              kaspi: links.kaspi.trim() || null,
-            },
-          },
-        }),
-      );
-      onDone(saved);
-    } catch (failure) {
-      setError(failure);
-      setBusy(false);
-    }
-  }
-
-  const link = (key: keyof typeof links) => (event: { target: { value: string } }) =>
-    setLinks({ ...links, [key]: event.target.value });
-
-  return (
-    <form onSubmit={submit} className="flex max-w-2xl flex-col gap-5">
-      <div className="grid gap-5 sm:grid-cols-2">
-        <TextField
-          className="sm:col-span-2"
-          label="Название магазина"
-          hint="Так бот будет представляться покупателям."
-          required
-          minLength={2}
-          maxLength={200}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <SelectField
-          label="Что продаёте"
-          value={niche}
-          onChange={(event) => setNiche(event.target.value)}
-        >
-          <option value="">Выберите</option>
-          {[...new Set([...NICHES, ...(shop.niche ? [shop.niche] : [])])].map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </SelectField>
-        <TextField
-          label="Город"
-          maxLength={100}
-          value={city}
-          onChange={(event) => setCity(event.target.value)}
-        />
-      </div>
-      <fieldset className="grid gap-5 sm:grid-cols-2">
-        <legend className="mb-3 font-medium">Где вас найти, если есть</legend>
-        <TextField
-          label="Instagram"
-          placeholder="@pion.almaty"
-          value={links.instagram}
-          onChange={link("instagram")}
-        />
-        <TextField
-          label="Сайт"
-          placeholder="pion.kz"
-          value={links.website}
-          onChange={link("website")}
-        />
-        <TextField
-          label="2GIS"
-          placeholder="Ссылка на карточку"
-          value={links.two_gis}
-          onChange={link("two_gis")}
-        />
-        <TextField
-          label="Kaspi"
-          placeholder="Ссылка на магазин"
-          value={links.kaspi}
-          onChange={link("kaspi")}
-        />
-      </fieldset>
-      <FormError error={error} />
-      <div>
-        <Button type="submit" loading={busy}>
-          Сохранить и продолжить
-        </Button>
-      </div>
-    </form>
-  );
-}
 
 function StepFooter({
   onNext,
@@ -212,8 +95,9 @@ export function SetupWizard() {
       />
       <div className="mt-8">
         {step === 1 && (
-          <BusinessStep
+          <BusinessForm
             shop={shop}
+            saveLabel="Сохранить и продолжить"
             onDone={(saved) => {
               void mutate("/shop", saved, { revalidate: false });
               void go(2);

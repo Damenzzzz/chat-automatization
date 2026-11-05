@@ -1,7 +1,9 @@
-export default function OverviewPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl">Обзор</h1>
-    </div>
-  );
+import type { Metadata } from "next";
+
+import { OverviewView } from "./view";
+
+export const metadata: Metadata = { title: "Обзор" };
+
+export default function Page() {
+  return <OverviewView />;
 }
