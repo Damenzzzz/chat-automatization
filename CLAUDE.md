@@ -10,6 +10,7 @@ apps/api/        FastAPI: кабинет, вебхуки каналов, ARQ-в�
   app/db/        async-движок SQLAlchemy 2, Base
   app/models/    ORM-модели (импортировать в __init__ для Alembic)
   app/llm/       ЕДИНСТВЕННОЕ место вызова LLM
+  app/channels/  шлюз каналов: адаптеры, очередь, склейка
   migrations/    Alembic (async)
 apps/ml/         FastAPI для локальных моделей: эмбеддинги, реранкер, whisper
 apps/web/        Next.js (App Router, TS, Tailwind 4, shadcn/ui): лендинг и кабинет
@@ -67,7 +68,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 
 ## ML-сервис и эмбеддинги
 
-- `apps/ml`: `POST /embed {texts, kind: query|document}` → нормализованные векторы 1024; `POST /rerank {query, documents}` → оценки 0..1; `GET /health` — статус загрузки и модели. Модели грузятся в фоне при старте, до готовности `/embed` и `/rerank` отвечают 503 (клиент API ретраит).
+- `apps/ml`: `POST /embed {texts, kind: query|document}` → нормализованные векторы 1024; `POST /rerank {query, documents}` → оценки 0..1; `POST /transcribe` (multipart `file`) → текст, язык; `GET /health` — статус загрузки и модели. Модели грузятся в фоне при старте, до готовности `/embed` и `/rerank` отвечают 503 (клиент API ретраит).
 - Бэкенды через env: `ML_EMBEDDER` / `ML_RERANKER` = `bge-m3` (по умолчанию, [ADR 0003](docs/adr/0003-bge-m3-default.md)) | `qwen3` | `fake` (без моделей, для разработки и CI). Кэш Hugging Face — volume `ml-models` (`HF_HOME=/models`), первый старт качает ~4,5 ГБ.
 - На CPU модели грузятся в float32 (`ML_DTYPE=auto`; bf16 на CPU в разы медленнее). BGE-M3 эмбеддер + реранкер занимают ~3,5 ГБ RAM, Qwen3 — ~5,5 ГБ (Docker Desktop ≥ 10 ГБ); без памяти — `ML_EMBEDDER=fake ML_RERANKER=fake`. Смена модели = полная переиндексация (все `embedding_stale = true`).
 - Тесты на настоящих моделях: `ML_REAL_MODELS=1` (в CI пропускаются); гонять в отдельном контейнере при остановленном `ml`, иначе не хватит памяти.
@@ -97,6 +98,20 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Профиль бота: `GET/PUT /bot-profile`, `GET /bot-profile/versions`, `POST /bot-profile/rollback {version?}`. Каждое сохранение и откат — новая версия, активна ровно одна.
 - В тестах — `FakeLLM` (сценарий по порядку вызовов) и `tests/agent_helpers.py` (`make_conversation`, `make_agent`).
 
+## Каналы
+
+- `app/channels`: `IncomingMessage` / `OutgoingMessage` (текст, карточки, кнопки), адаптеры с интерфейсом `ChannelAdapter` (`parse`, `send`, `download`, `acknowledge`, `check`), реестр — `registry.py`. Решения — [ADR 0005](docs/adr/0005-channel-gateway.md).
+- Путь сообщения: вебхук проверяет подпись → `Gateway.accept` (SETNX `dedup:*` на 24 часа, буфер, задача ARQ `flush_customer` через 1,5 с) → `Processor.flush` (последний `seq`, блокировка диалога, склейка) → граф. В режиме human сообщение сохраняется и уходит `notify_manager`.
+- Текст покупателя не класть в аргументы ARQ и логи. Токены не писать в ошибки: `ChannelHttp` убирает URL, логи httpx выключены (в URL Telegram лежит токен).
+- Карточки: только товары, упомянутые в ответе (до 3); цена и фото читаются из БД в узле `send`. Ошибка отправки не роняет ход: `delivered = false` и `error` в trace.
+- Подключение (только owner): `POST /channels/telegram {token}` (getMe + setWebhook с `secret_token`), `POST /channels/whatsapp`, `POST /channels/web {domain}` (выдаёт `snippet`), `POST /channels/{id}/check`, `GET /channels`.
+- Вебхуки: `/webhooks/telegram/{id}` (заголовок `X-Telegram-Bot-Api-Secret-Token`), `/webhooks/whatsapp/{id}` (GET — `hub.verify_token`, POST — `X-Hub-Signature-256` по `app_secret`).
+- Виджет: `POST /widget/{key}/messages`, `GET /widget/{key}/stream` (SSE на Redis Streams), заголовок `X-Widget-Session`; CORS только для `channels.domain` и его `www`. Лимиты: 20 в минуту на сессию, 60 на IP. Скрипт — `apps/web/public/widget.js`.
+- Голос: узел `transcribe` скачивает аудио через адаптер, шлёт в ML, кладёт расшифровку в `messages.content` и `messages.media.items[]`. Не распознали → `voice_failed`, бот просит написать текстом. В `apps/ml` базовая модель определяет язык, `kk` уходит в `KK_ASR_MODEL`; модель в формате Transformers при старте конвертируется в CTranslate2 (`/models/ct2`). `av<18`: faster-whisper 1.2 несовместим с новее. `ML_ASR=fake` — без моделей.
+- Env: `FERNET_KEY` обязателен для ключей каналов (иначе 503 `encryption_not_configured`), `PUBLIC_API_URL` должен быть HTTPS для Telegram (локально — адрес туннеля), `WHATSAPP_GRAPH_VERSION`.
+- Instagram — только заглушка адаптера, подключим после App Review.
+- В тестах: `tests/channel_helpers.py`, адаптеры через `httpx.MockTransport`, фикстуры вебхуков — `tests/fixtures/channels` (написаны по документации, не сняты с живого трафика).
+
 ## Модели
 
 | Задача | Модель | Где |
@@ -106,7 +121,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 | Сложный диалог | `gemini-3.6-flash` | Gemini API |
 | Эмбеддинги | BGE-M3 (запасной — Qwen3-Embedding-0.6B) | локально, apps/ml |
 | Реранкер | bge-reranker-v2-m3 (запасной — Qwen3-Reranker-0.6B) | локально, apps/ml |
-| Голос → текст | faster-whisper | локально, apps/ml |
+| Голос → текст | faster-whisper large-v3-turbo, для kk — `KK_ASR_MODEL` | локально, apps/ml |
 
 Ключ Gemini — ключ Vertex AI: клиент создаётся с `vertexai=True` (`GEMINI_USE_VERTEXAI=true`).
 
