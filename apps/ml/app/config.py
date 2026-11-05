@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     ml_rerank_batch_size: int = 8
     ml_rerank_max_tokens: int = 1024
 
+    ml_asr: Literal["faster-whisper", "fake"] = "faster-whisper"
+    asr_model: str = "large-v3-turbo"
+    kk_asr_model: str = "shyngys879/kazakh-whisper-large-v3-turbo"
+    ml_asr_compute_type: str = "auto"
+    ml_asr_dir: str = "/models/ct2"
+    ml_max_audio_bytes: int = 25 * 1024 * 1024
+    ml_max_audio_seconds: float = 600.0
+
 
 @lru_cache
 def get_settings() -> Settings:

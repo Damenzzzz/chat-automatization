@@ -2,6 +2,7 @@ import hashlib
 import math
 import random
 
+from app.models.asr import AudioError, Transcript
 from app.models.base import EMBEDDING_DIM, Kind
 
 
@@ -26,3 +27,19 @@ class FakeReranker:
     def score(self, query: str, documents: list[str]) -> list[float]:
         words = set(query.lower().split())
         return [len(words & set(doc.lower().split())) / (len(words) or 1) for doc in documents]
+
+
+class FakeTranscriber:
+    name = "fake-asr"
+
+    def transcribe(self, audio: bytes) -> Transcript:
+        if audio.startswith(b"bad"):
+            raise AudioError("не удалось прочитать аудио")
+        language = "kk" if audio.startswith(b"kk") else "ru"
+        return Transcript(
+            text=f"расшифровка {len(audio)} байт",
+            language=language,
+            language_probability=1.0,
+            duration=1.0,
+            model=self.name,
+        )

@@ -1,9 +1,11 @@
 import os
+from pathlib import Path
 
 import pytest
 
 from app.config import Settings
-from app.hub import build_embedder, build_reranker
+from app.hub import build_embedder, build_reranker, build_transcriber
+from app.models.asr import Transcriber
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("ML_REAL_MODELS") != "1", reason="настоящие модели: ML_REAL_MODELS=1"
@@ -40,3 +42,31 @@ def test_real_reranker_prefers_relevant_doc(backend: str) -> None:
 
     assert all(0.0 <= s <= 1.0 for s in scores)
     assert scores[0] > scores[1] >= scores[2]
+
+
+AUDIO_DIR = os.environ.get("ML_TEST_AUDIO_DIR")
+
+
+def _audio(name: str) -> bytes:
+    if not AUDIO_DIR or not (Path(AUDIO_DIR) / name).exists():
+        pytest.skip(f"нет файла {name} в ML_TEST_AUDIO_DIR")
+    return (Path(AUDIO_DIR) / name).read_bytes()
+
+
+@pytest.fixture(scope="module")
+def transcriber() -> Transcriber:
+    return build_transcriber(Settings(ml_asr="faster-whisper"), "cpu")
+
+
+def test_real_asr_russian_uses_base_model(transcriber: Transcriber) -> None:
+    result = transcriber.transcribe(_audio("ru.aiff"))
+    assert result.language == "ru"
+    assert result.model == Settings().asr_model
+    assert "букет" in result.text.lower()
+
+
+def test_real_asr_kazakh_uses_tuned_model(transcriber: Transcriber) -> None:
+    result = transcriber.transcribe(_audio("kk.aiff"))
+    assert result.language == "kk"
+    assert result.model == Settings().kk_asr_model
+    assert "гүл шоғы" in result.text.lower()

@@ -1,13 +1,15 @@
 import asyncio
 import time
+from pathlib import Path
 from typing import Any, Literal
 
 import structlog
 
 from app.config import Settings
+from app.models.asr import Transcriber, Transcript, WhisperTranscriber
 from app.models.base import Embedder, Kind, Reranker, resolve_device, resolve_dtype
 from app.models.embedders import SentenceTransformerEmbedder, qwen3_query_prompt
-from app.models.fake import FakeEmbedder, FakeReranker
+from app.models.fake import FakeEmbedder, FakeReranker, FakeTranscriber
 from app.models.rerankers import CrossEncoderReranker, Qwen3Reranker
 
 log = structlog.get_logger()
@@ -68,6 +70,22 @@ def build_reranker(settings: Settings, device: str) -> Reranker:
     raise ValueError(f"неизвестный реранкер: {settings.ml_reranker}")
 
 
+def build_transcriber(settings: Settings, device: str) -> Transcriber:
+    if settings.ml_asr == "fake":
+        return FakeTranscriber()
+    compute_type = settings.ml_asr_compute_type
+    if compute_type == "auto":
+        compute_type = "int8" if device == "cpu" else "float16"
+    return WhisperTranscriber(
+        settings.asr_model,
+        settings.kk_asr_model,
+        device=device,
+        compute_type=compute_type,
+        ct2_dir=Path(settings.ml_asr_dir),
+        max_seconds=settings.ml_max_audio_seconds,
+    )
+
+
 class ModelHub:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -78,6 +96,9 @@ class ModelHub:
         self.reranker: Reranker | None = None
         self._embed_lock = asyncio.Lock()
         self._rerank_lock = asyncio.Lock()
+        self.asr: Transcriber | None = None
+        self.asr_error: str | None = None
+        self._asr_lock = asyncio.Lock()
 
     def _load_sync(self) -> None:
         started = time.perf_counter()
@@ -101,6 +122,15 @@ class ModelHub:
         except Exception as exc:
             log.exception("ml.load_failed")
             self.status, self.error = "error", repr(exc)
+        await self.load_asr()
+
+    async def load_asr(self) -> None:
+        try:
+            self.asr = await asyncio.to_thread(build_transcriber, self.settings, self.device)
+            log.info("ml.asr_loaded", model=self.asr.name)
+        except Exception as exc:
+            log.exception("ml.asr_load_failed")
+            self.asr_error = repr(exc)
 
     async def embed(self, texts: list[str], kind: Kind) -> list[list[float]]:
         if self.embedder is None:
@@ -113,6 +143,12 @@ class ModelHub:
             raise NotReadyError
         async with self._rerank_lock:
             return await asyncio.to_thread(self.reranker.score, query, documents)
+
+    async def transcribe(self, audio: bytes) -> Transcript:
+        if self.asr is None:
+            raise NotReadyError
+        async with self._asr_lock:
+            return await asyncio.to_thread(self.asr.transcribe, audio)
 
     def health(self) -> dict[str, Any]:
         def info(model: Embedder | Reranker | None, backend: str) -> dict[str, Any]:
@@ -129,4 +165,10 @@ class ModelHub:
             "error": self.error,
             "embedder": info(self.embedder, self.settings.ml_embedder),
             "reranker": info(self.reranker, self.settings.ml_reranker),
+            "asr": {
+                "backend": self.settings.ml_asr,
+                "model": self.asr.name if self.asr else None,
+                "loaded": self.asr is not None,
+                "error": self.asr_error,
+            },
         }

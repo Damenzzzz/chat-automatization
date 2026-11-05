@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "Satushy ML service: local embeddings, reranker, speech-to-text"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "av<18",
     "fastapi>=0.162.0",
+    "faster-whisper>=1.2.1",
     "pydantic-settings>=2.16.2",
+    "python-multipart>=0.0.33",
     "sentence-transformers>=6.2.0",
     "structlog>=26.1.0",
     "torch>=2.15.0",
@@ -41,6 +44,10 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["app", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["ctranslate2.*", "faster_whisper.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

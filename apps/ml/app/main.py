@@ -5,11 +5,12 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
 from app.hub import ModelHub, NotReadyError
+from app.models.asr import AudioError, AudioTooLongError
 from app.models.base import Kind
 
 
@@ -32,6 +33,14 @@ class RerankIn(BaseModel):
 class RerankOut(BaseModel):
     model: str
     scores: list[float]
+
+
+class TranscribeOut(BaseModel):
+    text: str
+    language: str
+    language_probability: float
+    duration: float
+    model: str
 
 
 def _configure_logging(settings: Settings) -> None:
@@ -105,6 +114,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise _not_ready(hub) from exc
         assert hub.reranker is not None  # noqa: S101
         return RerankOut(model=hub.reranker.name, scores=scores)
+
+    @app.post("/transcribe")
+    async def transcribe(file: UploadFile, request: Request) -> TranscribeOut:
+        audio = await file.read(settings.ml_max_audio_bytes + 1)
+        if len(audio) > settings.ml_max_audio_bytes:
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "audio_too_large")
+        if not audio:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "audio_empty")
+        hub = _hub(request)
+        try:
+            result = await hub.transcribe(audio)
+        except NotReadyError as exc:
+            detail = "asr_failed" if hub.asr_error else "asr_loading"
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail) from exc
+        except AudioTooLongError as exc:
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "audio_too_long") from exc
+        except AudioError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "audio_invalid") from exc
+        return TranscribeOut(
+            text=result.text,
+            language=result.language,
+            language_probability=result.language_probability,
+            duration=result.duration,
+            model=result.model,
+        )
 
     return app
 
