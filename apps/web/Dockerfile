@@ -10,7 +10,8 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
 
 FROM deps AS build
-ENV NEXT_TELEMETRY_DISABLED=1
+ARG API_INTERNAL_URL=http://api:8000
+ENV NEXT_TELEMETRY_DISABLED=1 API_INTERNAL_URL=$API_INTERNAL_URL
 COPY . .
 RUN npm run build
 

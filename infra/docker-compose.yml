@@ -138,7 +138,7 @@ services:
       context: ../apps/web
       target: dev
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8100}
+      API_INTERNAL_URL: http://api:8000
     ports:
       - "${WEB_PORT:-3000}:3000"
     volumes:
