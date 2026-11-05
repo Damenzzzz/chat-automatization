@@ -59,6 +59,7 @@ class Settings(BaseSettings):
 
     public_api_url: str = "http://localhost:8100"
     channel_debounce_seconds: float = 1.5
+    whatsapp_graph_version: str = "v25.0"
 
     @property
     def cookie_secure(self) -> bool:

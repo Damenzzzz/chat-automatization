@@ -1,0 +1,39 @@
+{
+ "object": "whatsapp_business_account",
+ "entry": [
+  {
+   "id": "102290129340398",
+   "changes": [
+    {
+     "value": {
+      "messaging_product": "whatsapp",
+      "metadata": {
+       "display_phone_number": "77001234567",
+       "phone_number_id": "106540352242922"
+      },
+      "contacts": [
+       {
+        "profile": {
+         "name": "Динара"
+        },
+        "wa_id": "77011112233"
+       }
+      ],
+      "messages": [
+       {
+        "from": "77011112233",
+        "timestamp": "1793800000",
+        "id": "wamid.TEXT1",
+        "type": "text",
+        "text": {
+         "body": "Сколько стоят белые пионы?"
+        }
+       }
+      ]
+     },
+     "field": "messages"
+    }
+   ]
+  }
+ ]
+}

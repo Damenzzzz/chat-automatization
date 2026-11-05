@@ -1,0 +1,47 @@
+{
+ "object": "whatsapp_business_account",
+ "entry": [
+  {
+   "id": "102290129340398",
+   "changes": [
+    {
+     "value": {
+      "messaging_product": "whatsapp",
+      "metadata": {
+       "display_phone_number": "77001234567",
+       "phone_number_id": "106540352242922"
+      },
+      "contacts": [
+       {
+        "profile": {
+         "name": "Динара"
+        },
+        "wa_id": "77011112233"
+       }
+      ],
+      "messages": [
+       {
+        "from": "77011112233",
+        "timestamp": "1793800000",
+        "id": "wamid.BTN1",
+        "type": "interactive",
+        "context": {
+         "from": "77001234567",
+         "id": "wamid.PREV"
+        },
+        "interactive": {
+         "type": "button_reply",
+         "button_reply": {
+          "id": "order:kk:PN-004",
+          "title": "Тапсырыс беру"
+         }
+        }
+       }
+      ]
+     },
+     "field": "messages"
+    }
+   ]
+  }
+ ]
+}

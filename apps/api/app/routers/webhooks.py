@@ -94,10 +94,13 @@ async def whatsapp_verify(
 async def whatsapp_webhook(
     channel_id: uuid.UUID,
     request: Request,
+    gateway: GatewayDep,
+    adapters: AdaptersDep,
     signature: Annotated[str | None, Header(alias="X-Hub-Signature-256")] = None,
 ) -> dict[str, bool]:
     channel = await channel_of_type(channel_id, "whatsapp")
     body = await read_body(request)
     if not verify_signature(channel.credentials.get("app_secret", ""), body, signature):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid_signature")
+    await accept_all(gateway, channel, parse_payload(adapters["whatsapp"], channel, body))
     return {"ok": True}

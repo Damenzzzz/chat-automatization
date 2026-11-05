@@ -1,0 +1,42 @@
+{
+ "object": "whatsapp_business_account",
+ "entry": [
+  {
+   "id": "102290129340398",
+   "changes": [
+    {
+     "value": {
+      "messaging_product": "whatsapp",
+      "metadata": {
+       "display_phone_number": "77001234567",
+       "phone_number_id": "106540352242922"
+      },
+      "contacts": [
+       {
+        "profile": {
+         "name": "Динара"
+        },
+        "wa_id": "77011112233"
+       }
+      ],
+      "messages": [
+       {
+        "from": "77011112233",
+        "timestamp": "1793800000",
+        "id": "wamid.AUDIO1",
+        "type": "audio",
+        "audio": {
+         "mime_type": "audio/ogg; codecs=opus",
+         "sha256": "abc",
+         "id": "1037543291543636",
+         "voice": true
+        }
+       }
+      ]
+     },
+     "field": "messages"
+    }
+   ]
+  }
+ ]
+}
