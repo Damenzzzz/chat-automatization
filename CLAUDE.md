@@ -11,6 +11,8 @@ apps/api/        FastAPI: кабинет, вебхуки каналов, ARQ-в�
   app/models/    ORM-модели (импортировать в __init__ для Alembic)
   app/llm/       ЕДИНСТВЕННОЕ место вызова LLM
   app/channels/  шлюз каналов: адаптеры, очередь, склейка
+  app/billing/   цены, журнал, счёт PDF, уведомления о балансе
+  app/analytics/ периоды, метрики, группировка неотвеченных
   migrations/    Alembic (async)
 apps/ml/         FastAPI для локальных моделей: эмбеддинги, реранкер, whisper
 apps/web/        Next.js (App Router, TS, Tailwind 4, shadcn/ui): лендинг и кабинет
@@ -111,6 +113,25 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Env: `FERNET_KEY` обязателен для ключей каналов (иначе 503 `encryption_not_configured`), `PUBLIC_API_URL` должен быть HTTPS для Telegram (локально — адрес туннеля), `WHATSAPP_GRAPH_VERSION`.
 - Instagram — только заглушка адаптера, подключим после App Review.
 - В тестах: `tests/channel_helpers.py`, адаптеры через `httpx.MockTransport`, фикстуры вебхуков — `tests/fixtures/channels` (написаны по документации, не сняты с живого трафика).
+
+## Биллинг и лимиты
+
+Правила и причины — [ADR 0006](docs/adr/0006-billing-rules.md).
+
+- Цена ответа: `ceil(cost_usd × k × курс)`, минимум 1 ₸ (`app/billing/pricing.py`, только `Decimal`). Настройки: `GET/PUT /admin/pricing`, `PUT /admin/tenants/{id}/pricing`; без них k = 3 и `PRICING_KZT_PER_USD`.
+- Баланс — только сумма `ledger` (`get_balance`). Списание — `charge_reply` в узле `meter`, под блокировкой; не больше остатка, в минус не уходит. Без списания: песочница, шаблон без LLM, недоставленный ответ.
+- Узел `gate` (после `guard_in`, в песочнице пропускается): баланс ниже средней цены ответа → `no_balance`; 30 ответов бота покупателю за час (`BOT_REPLIES_PER_HOUR`) → `rate_limit`. Оба случая: шаблон без LLM, `mode = human`, `conversations.paused_reason`. Пополнение возвращает боту только `no_balance`.
+- Пополнение: `GET /billing/invoice?amount_kzt=` (PDF, реквизиты `BILLING_SELLER_*`, без них 503) → `POST /admin/tenants/{id}/topup {invoice_no}` или `{amount_kzt, provider}`. Повторная оплата счёта — 409.
+- Уведомления: 20%, 5% и 0 от последнего пополнения → `notifications` (`GET /notifications`) и Telegram владельца (ARQ `notify_owner`), привязка — `POST /me/telegram/link`.
+- `GET /balance`: баланс, расход и число ответов за 7 дней, прогноз в днях.
+- Новый тест с ответом бота на канале требует денег: `make_conversation` и `make_shop` пополняют магазин (`funds=0` — без денег).
+- Шрифт счёта — подмножество DejaVu в `app/billing/fonts` (кириллица, казахские буквы, ₸).
+
+## Аналитика
+
+- `GET /analytics/overview`, `dialogs_by_day`, `top_queries`, `unanswered` (`date_from`, `date_to`, по умолчанию 7 дней); дни считаются по `ANALYTICS_TIMEZONE`, песочница исключена.
+- `unanswered` группирует вопросы эмбеддингами с порогом `UNANSWERED_GROUP_THRESHOLD` (ML недоступен → точное совпадение текста, `grouped_by = text`).
+- `POST /unanswered/{id}/answer {answer, also_resolve}` → кусок `kb_chunks` (`source = unanswered`), ARQ `reindex_embeddings`, вопросы решены.
 
 ## Модели
 
