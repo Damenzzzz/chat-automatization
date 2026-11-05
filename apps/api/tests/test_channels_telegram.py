@@ -8,6 +8,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -22,6 +23,7 @@ from app.channels.types import (
     OutgoingMessage,
     ProductCard,
 )
+from app.core import crypto
 from app.core.config import get_settings
 from app.core.crypto import decrypt_json
 from tests.channel_helpers import make_channel
@@ -301,6 +303,22 @@ async def test_token_rejected_by_telegram_creates_no_channel(
     response = await client.post("/channels/telegram", json={"token": TOKEN})
     assert response.status_code == 400
     assert (await client.get("/channels")).json() == []
+
+
+async def test_placeholder_fernet_key_gives_clear_error(
+    client: AsyncClient,
+    owner: uuid.UUID,
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(get_settings(), "fernet_key", SecretStr("change-me"))
+    crypto._fernet.cache_clear()
+    try:
+        response = await client.post("/channels/telegram", json={"token": TOKEN})
+    finally:
+        crypto._fernet.cache_clear()
+    assert response.status_code == 503
+    assert response.json()["detail"] == "encryption_not_configured"
 
 
 async def test_manager_cannot_manage_channels(
