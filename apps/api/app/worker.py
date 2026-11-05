@@ -60,7 +60,7 @@ async def reindex_all(ctx: dict[str, Any]) -> int:
 async def notify_manager(
     ctx: dict[str, Any], tenant_id: str, event: str, payload: dict[str, Any]
 ) -> None:
-    log.info("manager.notify", tenant_id=tenant_id, event=event, **payload)
+    log.info("manager.notify", tenant_id=tenant_id, notification=event, **payload)
 
 
 async def flush_customer(
