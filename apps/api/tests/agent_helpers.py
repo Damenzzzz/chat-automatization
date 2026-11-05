@@ -37,9 +37,11 @@ async def make_conversation(
     return tenant_id, conversation_id
 
 
-async def make_agent(llm: Any = None, ml: Any = None) -> tuple[Agent, RecordingQueue]:
+async def make_agent(
+    llm: Any = None, ml: Any = None, channels: Any = None
+) -> tuple[Agent, RecordingQueue]:
     queue = RecordingQueue()
-    deps = AgentDeps(llm=llm, ml=ml or FakeML(), queue=queue)
+    deps = AgentDeps(llm=llm, ml=ml or FakeML(), queue=queue, channels=channels)
     return Agent(deps, await get_checkpointer()), queue
 
 

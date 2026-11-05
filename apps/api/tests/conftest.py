@@ -44,7 +44,8 @@ for key, value in {
     "S3_ENDPOINT_URL": "http://localhost:9000",
     "S3_ACCESS_KEY": "test",
     "S3_SECRET_KEY": "test",
-    "FERNET_KEY": "test",
+    "FERNET_KEY": "dGVzdC1mZXJuZXQta2V5LWZvci1weXRlc3Qtb25seSE=",
+    "PUBLIC_API_URL": "https://api.test",
     "JWT_SECRET": "test-secret-for-pytest-only-0123456789",
 }.items():
     os.environ.setdefault(key, value)
@@ -120,9 +121,17 @@ def storage() -> MemoryStorage:
 class RecordingQueue:
     def __init__(self) -> None:
         self.jobs: list[tuple[str, tuple[object, ...]]] = []
+        self.delays: list[float | None] = []
 
-    async def enqueue(self, function: str, *args: object, job_id: str | None = None) -> None:
+    async def enqueue(
+        self,
+        function: str,
+        *args: object,
+        job_id: str | None = None,
+        defer_by: float | None = None,
+    ) -> None:
         self.jobs.append((function, args))
+        self.delays.append(defer_by)
 
 
 @pytest.fixture

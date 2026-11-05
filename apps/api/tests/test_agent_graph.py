@@ -53,6 +53,6 @@ async def test_voice_goes_through_transcribe(owner_engine: AsyncEngine) -> None:
         tenant_id=tenant_id,
         conversation_id=conversation_id,
         text="",
-        audio_url="s3://voice.ogg",
+        media=[{"kind": "audio", "file_id": "voice"}],
     )
     assert nodes(result.trace)[:3] == ["ingest", "transcribe", "guard_in"]

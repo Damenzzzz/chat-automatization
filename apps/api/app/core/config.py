@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     catalog_max_upload_bytes: int = 20 * 1024 * 1024
     catalog_max_rows: int = 50_000
 
+    public_api_url: str = "http://localhost:8100"
+    channel_debounce_seconds: float = 1.5
+
     @property
     def cookie_secure(self) -> bool:
         return self.env == "prod"

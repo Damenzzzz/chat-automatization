@@ -2,7 +2,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any
+from typing import Any, Protocol
 
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
@@ -23,14 +23,24 @@ from app.agent.understand import (
     merge_slots,
     router_messages,
 )
+from app.channels.outgoing import mentioned_products, product_card
+from app.channels.types import ChannelError, Media, OutgoingMessage, ProductCard
 from app.core.config import get_settings
 from app.core.queue import Queue
 from app.db.session import tenant_session
 from app.llm import LLM, LLMError, ToolCall
-from app.models import Conversation, Message, Unanswered
+from app.models import Conversation, Message, Product, Unanswered
 from app.search.types import SearchML
 
 log = structlog.get_logger()
+
+
+class ChannelPort(Protocol):
+    async def send(
+        self, channel_id: uuid.UUID, customer_external_id: str, message: OutgoingMessage
+    ) -> None: ...
+
+    async def download(self, channel_id: uuid.UUID, media: Media) -> bytes: ...
 
 
 @dataclass
@@ -38,6 +48,7 @@ class AgentDeps:
     llm: LLM | None
     ml: SearchML
     queue: Queue
+    channels: ChannelPort | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -62,15 +73,16 @@ class AgentNodes:
             mode = await session.scalar(
                 select(Conversation.mode).where(Conversation.id == conversation_id)
             )
-            session.add(
-                Message(
-                    tenant_id=self.tenant(state),
-                    conversation_id=conversation_id,
-                    role="customer",
-                    content=text or None,
-                    media={"audio_url": state["audio_url"]} if state.get("audio_url") else None,
-                )
+            message = Message(
+                tenant_id=self.tenant(state),
+                conversation_id=conversation_id,
+                role="customer",
+                content=text or None,
+                media={"items": state["media"]} if state.get("media") else None,
+                external_id=state.get("external_id"),
             )
+            session.add(message)
+            await session.flush()
             await session.execute(
                 update(Conversation)
                 .where(Conversation.id == conversation_id)
@@ -78,6 +90,8 @@ class AgentNodes:
             )
         return {
             "human_mode": mode == "human",
+            "customer_message_id": str(message.id),
+            "voice_failed": False,
             "context": [],
             "tool_hops": 0,
             "retries": 0,
@@ -335,9 +349,43 @@ class AgentNodes:
             "trace": step(state, "fallback", errors=state.get("check_errors", [])),
         }
 
+    async def cards(self, state: ChatState, reply: str) -> list[ProductCard]:
+        ids = mentioned_products(reply, state.get("context", []))
+        if not ids:
+            return []
+        async with tenant_session(self.tenant(state)) as session:
+            rows = await session.scalars(
+                select(Product).where(
+                    Product.id.in_([uuid.UUID(i) for i in ids]), Product.is_active
+                )
+            )
+            products = {str(p.id): p for p in rows}
+        return [
+            product_card(
+                name=p.name,
+                sku=p.sku,
+                price=p.price,
+                images=p.images,
+                lang=state.get("lang"),
+            )
+            for p in (products[i] for i in ids if i in products)
+        ]
+
     async def send(self, state: ChatState) -> dict[str, Any]:
-        last = state["messages"][-1]
-        return {"reply": str(last.content), "trace": step(state, "send", stub="шаг 8")}
+        reply = str(state["messages"][-1].content)
+        channels, channel_id = self.deps.channels, state.get("channel_id")
+        customer = state.get("customer_external_id")
+        if state.get("sandbox") or channels is None or not channel_id or not customer:
+            return {"reply": reply, "trace": step(state, "send", delivered=False)}
+        message = OutgoingMessage(text=reply, cards=await self.cards(state, reply))
+        try:
+            await channels.send(uuid.UUID(channel_id), customer, message)
+        except ChannelError as exc:
+            log.warning("agent.send_failed", channel_id=channel_id, error=str(exc))
+            trace = step(state, "send", delivered=False, error=str(exc))
+            return {"reply": reply, "trace": trace}
+        trace = step(state, "send", delivered=True, cards=len(message.cards))
+        return {"reply": reply, "trace": trace}
 
     def unanswered(self, state: ChatState) -> bool:
         if any(t["node"] in ("fallback",) for t in state.get("trace", [])):

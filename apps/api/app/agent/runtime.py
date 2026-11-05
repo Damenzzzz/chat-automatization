@@ -38,14 +38,20 @@ class Agent:
         text: str,
         channel: str = "web",
         sandbox: bool = False,
-        audio_url: str | None = None,
+        channel_id: uuid.UUID | None = None,
+        customer_external_id: str | None = None,
+        external_id: str | None = None,
+        media: list[dict[str, Any]] | None = None,
     ) -> TurnResult:
         incoming: ChatState = {
             "tenant_id": str(tenant_id),
             "conversation_id": str(conversation_id),
             "channel": channel,
             "sandbox": sandbox,
-            "audio_url": audio_url,
+            "channel_id": str(channel_id) if channel_id else None,
+            "customer_external_id": customer_external_id,
+            "external_id": external_id,
+            "media": media or [],
             "messages": [HumanMessage(text)],
         }
         state = await self.graph.ainvoke(

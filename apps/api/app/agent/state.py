@@ -8,7 +8,12 @@ class ChatState(TypedDict, total=False):
     tenant_id: str
     conversation_id: str
     channel: str
-    audio_url: str | None
+    channel_id: str | None
+    customer_external_id: str | None
+    external_id: str | None
+    media: list[dict[str, Any]]
+    customer_message_id: str
+    voice_failed: bool
     human_mode: bool
     sandbox: bool
     messages: Annotated[list[AnyMessage], add_messages]

@@ -39,7 +39,7 @@ class Node(Protocol):
 
 
 def after_ingest(state: ChatState) -> str:
-    return "transcribe" if state.get("audio_url") else "guard_in"
+    return "transcribe" if state.get("media") else "guard_in"
 
 
 def after_guard_in(state: ChatState) -> str:

@@ -47,6 +47,14 @@ class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):
         CheckConstraint("mode IN ('bot', 'human')", name="mode"),
         CheckConstraint("status IN ('open', 'closed')", name="status"),
         Index("ix_conversations_tenant_id_last_message_at", "tenant_id", "last_message_at"),
+        Index(
+            "uq_conversations_open",
+            "tenant_id",
+            "customer_id",
+            "channel_id",
+            unique=True,
+            postgresql_where=sql_text("status = 'open' AND NOT sandbox"),
+        ),
     )
 
     customer_id: Mapped[uuid.UUID] = mapped_column(

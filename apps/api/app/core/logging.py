@@ -5,6 +5,9 @@ import structlog
 
 def configure_logging(level: str = "INFO", *, json: bool = False) -> None:
     logging.basicConfig(format="%(message)s", level=level)
+    # httpx пишет полный URL запроса, а в URL Telegram лежит токен бота
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     renderer: structlog.types.Processor = (
         structlog.processors.JSONRenderer() if json else structlog.dev.ConsoleRenderer()
     )

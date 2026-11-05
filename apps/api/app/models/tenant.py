@@ -82,6 +82,8 @@ class Channel(IdMixin, TimestampMixin, TenantMixin, Base):
     __table_args__ = (
         CheckConstraint(f"type IN {CHANNEL_TYPES}", name="type"),
         CheckConstraint("status IN ('pending', 'active', 'error', 'disabled')", name="status"),
+        Index("uq_channels_public_key", "public_key", unique=True),
+        Index("uq_channels_type_external_id", "type", "external_id", unique=True),
     )
 
     type: Mapped[str] = mapped_column(String(16))
@@ -91,3 +93,5 @@ class Channel(IdMixin, TimestampMixin, TenantMixin, Base):
     webhook_secret: Mapped[str | None] = mapped_column(String(128))
     status: Mapped[str] = mapped_column(String(16), server_default="pending")
     last_error: Mapped[str | None] = mapped_column(Text)
+    public_key: Mapped[str | None] = mapped_column(String(64))
+    domain: Mapped[str | None] = mapped_column(String(253))
