@@ -1,7 +1,10 @@
 import hashlib
+import re
 import secrets
 import uuid
+from html import escape
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, SecretStr
@@ -22,6 +25,7 @@ router = APIRouter(prefix="/channels", tags=["channels"])
 
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 AdaptersDep = Annotated[dict[str, ChannelAdapter], Depends(get_adapters)]
+DOMAIN = re.compile(r"^(localhost|([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]{2,})$")
 
 
 class ChannelOut(BaseModel):
@@ -32,6 +36,13 @@ class ChannelOut(BaseModel):
     last_error: str | None
     webhook_url: str | None = None
     verify_token: str | None = None
+    public_key: str | None = None
+    domain: str | None = None
+    snippet: str | None = None
+
+
+class WebIn(BaseModel):
+    domain: str = Field(min_length=1, max_length=253)
 
 
 class TelegramIn(BaseModel):
@@ -58,6 +69,27 @@ def webhook_url(channel: Channel) -> str | None:
     return f"{base}/webhooks/{channel.type}/{channel.id}"
 
 
+def widget_snippet(channel: Channel) -> str | None:
+    if channel.type != "web" or not channel.public_key:
+        return None
+    settings = get_settings()
+    src = escape(f"{settings.public_web_url.rstrip('/')}/widget.js")
+    api = escape(settings.public_api_url.rstrip("/"))
+    return f'<script src="{src}" data-key="{channel.public_key}" data-api="{api}" async></script>'
+
+
+def normalize_domain(raw: str) -> str | None:
+    value = raw.strip().lower()
+    host = urlsplit(value if "//" in value else f"//{value}").hostname
+    if not host:
+        return None
+    try:
+        host = host.encode("idna").decode()
+    except UnicodeError:
+        return None
+    return host if DOMAIN.match(host) else None
+
+
 def channel_out(channel: Channel) -> ChannelOut:
     return ChannelOut(
         id=channel.id,
@@ -67,6 +99,9 @@ def channel_out(channel: Channel) -> ChannelOut:
         last_error=channel.last_error,
         webhook_url=webhook_url(channel),
         verify_token=channel.webhook_secret if channel.type == "whatsapp" else None,
+        public_key=channel.public_key,
+        domain=channel.domain,
+        snippet=widget_snippet(channel),
     )
 
 
@@ -150,6 +185,28 @@ async def connect_whatsapp(body: WhatsAppIn, principal: Owner, db: TenantDb) -> 
         status="pending",
         last_error=None,
     )
+    return channel_out(channel)
+
+
+@router.post("/web", status_code=status.HTTP_201_CREATED)
+async def connect_web(body: WebIn, principal: Owner, db: TenantDb) -> ChannelOut:
+    domain = normalize_domain(body.domain)
+    if domain is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "domain_invalid")
+    channel = await db.scalar(
+        select(Channel).where(Channel.type == "web", Channel.domain == domain)
+    )
+    if channel is None:
+        channel = Channel(
+            tenant_id=principal.tenant_id,
+            type="web",
+            name=domain,
+            domain=domain,
+            public_key=secrets.token_urlsafe(24),
+            status="active",
+        )
+        db.add(channel)
+        await db.flush()
     return channel_out(channel)
 
 

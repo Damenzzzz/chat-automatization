@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     catalog_max_rows: int = 50_000
 
     public_api_url: str = "http://localhost:8100"
+    public_web_url: str = "http://localhost:3000"
     channel_debounce_seconds: float = 1.5
     whatsapp_graph_version: str = "v25.0"
 

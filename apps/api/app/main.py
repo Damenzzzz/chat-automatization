@@ -16,6 +16,7 @@ from app.routers import (
     sandbox,
     team,
     webhooks,
+    widget,
 )
 
 
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(bot_profile.router)
     app.include_router(channels.router)
     app.include_router(webhooks.router)
+    app.include_router(widget.router)
     return app
 
 
