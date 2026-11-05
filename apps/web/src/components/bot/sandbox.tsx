@@ -68,7 +68,7 @@ export function SandboxChat() {
         <p className="text-sm text-steel">Покупатели этого не видят, деньги не списываются.</p>
         <button
           type="button"
-          className="shrink-0 text-sm font-medium underline underline-offset-2"
+          className="min-h-9 shrink-0 text-sm font-medium underline underline-offset-2"
           onClick={() => {
             setSession(crypto.randomUUID().replaceAll("-", ""));
             setLines([]);

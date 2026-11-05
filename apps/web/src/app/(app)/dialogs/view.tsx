@@ -119,7 +119,9 @@ function List({ filter, activeId }: { filter: Filter; activeId: string | null })
   return (
     <>
       <div className="border-b border-line px-4 pt-4 pb-3">
-        <h1 className="text-xl">Диалоги</h1>
+        <p aria-hidden className="display text-xl">
+          Диалоги
+        </p>
         <nav aria-label="Фильтр диалогов" className="mt-3 -ml-1 flex flex-wrap gap-1">
           {FILTERS.map((item) => {
             const active = item.value === filter;
@@ -189,7 +191,8 @@ export function DialogsView() {
   const filter: Filter = raw === "bot" || raw === "human" || raw === "leads" ? raw : "all";
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] min-h-0 lg:h-svh">
+    <div className="flex min-h-0 max-lg:h-[calc(100dvh-3.5rem)] lg:flex-1">
+      <h1 className="sr-only">Диалоги</h1>
       <div
         className={cn(
           "flex min-h-0 w-full flex-col border-r border-line lg:w-80 lg:shrink-0 xl:w-96",

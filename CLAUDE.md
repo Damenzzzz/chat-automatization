@@ -15,7 +15,7 @@ apps/api/        FastAPI: кабинет, вебхуки каналов, ARQ-в�
   app/analytics/ периоды, метрики, группировка неотвеченных
   migrations/    Alembic (async)
 apps/ml/         FastAPI для локальных моделей: эмбеддинги, реранкер, whisper
-apps/web/        Next.js (App Router, TS, Tailwind 4, shadcn/ui): лендинг и кабинет
+apps/web/        Next.js (App Router, TS, Tailwind 4): кабинет магазина
 infra/           docker-compose.yml для разработки
 docs/adr/        архитектурные решения (ADR)
 docs/design-tokens.md
@@ -33,6 +33,7 @@ make admin ARGS="--email you@satushy.kz"   # админ Satushy
 make eval               # качество поиска: Qwen3 против BGE-M3
 make test               # pytest api + ml; тесты api пересоздают базу satushy_test в docker-postgres
 make lint               # ruff, mypy, eslint, prettier, tsc
+make api-types          # типы клиента из OpenAPI работающего api
 make fmt                # автоформат
 make down
 ```
@@ -132,6 +133,19 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - `GET /analytics/overview`, `dialogs_by_day`, `top_queries`, `unanswered` (`date_from`, `date_to`, по умолчанию 7 дней); дни считаются по `ANALYTICS_TIMEZONE`, песочница исключена.
 - `unanswered` группирует вопросы эмбеддингами с порогом `UNANSWERED_GROUP_THRESHOLD` (ML недоступен → точное совпадение текста, `grouped_by = text`).
 - `POST /unanswered/{id}/answer {answer, also_resolve}` → кусок `kb_chunks` (`source = unanswered`), ARQ `reindex_embeddings`, вопросы решены.
+
+## Кабинет (apps/web)
+
+Смысл оформления и токены — [docs/design-tokens.md](docs/design-tokens.md). Решения — [ADR 0007](docs/adr/0007-cabinet-api-access.md).
+
+- Страницы: `/login`, `/signup`, `/setup?step=1..5`, `/overview`, `/dialogs?id=&filter=`, `/leads`, `/products`, `/bot`, `/channels`, `/balance`, `/settings`. `page.tsx` — серверный (metadata), `view.tsx` — клиентский.
+- API только через прокси Next: `/api/*` и `/auth/*` (`next.config.ts`, `API_INTERNAL_URL`; при `output: standalone` адрес зашивается при сборке). `/auth` отдельно: refresh-cookie живёт на этом пути.
+- Клиент: `api` из `lib/api/client.ts` (openapi-fetch, при 401 один раз обновляет сессию) и `unwrap` + SWR. Ключ SWR — строка с путём: `InboxStream` по SSE сбрасывает всё, что начинается с `/conversations` и `/leads`.
+- Новый код ошибки API — текст в `lib/api/errors.ts`. Схема поменялась — `make api-types` и коммит `schema.d.ts`.
+- API кабинета: `GET /conversations`, `/conversations/{id}`, `/conversations/stream` (SSE), `POST /conversations/{id}/takeover|release|reply`, `GET/PATCH /leads`, `GET /products`, `GET/PATCH /shop`. Стоимость модели наружу не отдаём: у сообщения только `steps`, без `llm_calls` и `cost_usd`.
+- Ответ менеджера кладётся и в чекпоинт бота (`Agent.remember_manager_reply`), иначе после «Вернуть боту» бот его не знает.
+- Примитивы — `components/ui`, свои, на нативных `button`, `label`, `select`, `dialog`. Новый шрифт проверять по таблице символов: `ә ғ қ ң ө ұ ү һ і` и ₸.
+- Новые страницы в запущенном `next dev` могут отдавать 404 до перезапуска. Новая зависимость в контейнере — `make up` (пересоздаёт анонимный том `node_modules`).
 
 ## Модели
 

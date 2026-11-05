@@ -8,7 +8,7 @@ API := cd apps/api &&
 ML := cd apps/ml &&
 WEB := cd apps/web &&
 
-.PHONY: help up down logs ps migrate seed admin eval test lint fmt install
+.PHONY: help up down logs ps migrate seed admin eval test lint fmt install api-types
 
 help: ## Список команд
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -20,7 +20,7 @@ install: ## Поставить зависимости локально (uv, npm)
 	uvx pre-commit install
 
 up: ## Поднять все сервисы и дождаться healthcheck
-	$(COMPOSE) up -d --build --wait
+	$(COMPOSE) up -d --build --wait --renew-anon-volumes
 
 down: ## Остановить сервисы (данные в volumes сохраняются)
 	$(COMPOSE) down
@@ -52,6 +52,9 @@ eval: ## Качество поиска по моделям EVAL_MODELS → apps/
 test: ## Тесты api (нужен make up — postgres) и ml
 	$(API) uv run pytest
 	$(ML) uv run pytest
+
+api-types: ## Типы клиента из OpenAPI работающего api
+	$(WEB) npm run api:types
 
 lint: ## ruff, mypy, eslint, prettier, tsc
 	$(API) uv run ruff check . && uv run ruff format --check . && uv run mypy

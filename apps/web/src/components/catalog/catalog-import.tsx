@@ -112,7 +112,8 @@ function PickSource({ onPicked }: { onPicked: (job: Job) => void }) {
           type="file"
           accept=".xlsx,.csv"
           className="sr-only"
-          id="catalog-file"
+          aria-label="Файл с товарами"
+          tabIndex={-1}
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = "";

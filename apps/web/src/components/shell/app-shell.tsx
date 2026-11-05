@@ -166,8 +166,10 @@ function Banners() {
   const { me, shop, isOwner } = useSession();
   const pathname = usePathname();
   const [leaving, setLeaving] = useState(false);
+  if (!me?.impersonated_by && !(isOwner && shop?.status === "onboarding" && pathname !== "/setup"))
+    return null;
   return (
-    <>
+    <aside aria-label="Напоминания">
       {me?.impersonated_by && (
         <div className="on-ink flex flex-wrap items-center justify-between gap-2 bg-ink px-4 py-2 text-sm text-paper sm:px-8">
           <span>Вы вошли как клиент «{me.tenant_name}». Каждое изменение пишется в журнал.</span>
@@ -187,7 +189,12 @@ function Banners() {
         </div>
       )}
       {isOwner && shop?.status === "onboarding" && pathname !== "/setup" && (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line bg-mist px-4 py-2.5 text-sm sm:px-8">
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line bg-mist px-4 py-2.5 text-sm sm:px-8",
+            pathname === "/dialogs" && "max-lg:hidden",
+          )}
+        >
           <span>Настройка магазина не закончена.</span>
           <Link
             href={`/setup?step=${shop.onboarding_step}`}
@@ -197,7 +204,7 @@ function Banners() {
           </Link>
         </div>
       )}
-    </>
+    </aside>
   );
 }
 
