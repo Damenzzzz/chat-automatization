@@ -1,9 +1,10 @@
+import hashlib
 import secrets
 import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,10 +31,18 @@ class ChannelOut(BaseModel):
     status: str
     last_error: str | None
     webhook_url: str | None = None
+    verify_token: str | None = None
 
 
 class TelegramIn(BaseModel):
     token: SecretStr
+
+
+class WhatsAppIn(BaseModel):
+    phone_number_id: str = Field(pattern=r"^\d{5,32}$")
+    waba_id: str = Field(pattern=r"^\d{5,32}$")
+    access_token: SecretStr = Field(min_length=20, max_length=1024)
+    app_secret: SecretStr = Field(min_length=16, max_length=256)
 
 
 class CheckOut(BaseModel):
@@ -57,6 +66,7 @@ def channel_out(channel: Channel) -> ChannelOut:
         status=channel.status,
         last_error=channel.last_error,
         webhook_url=webhook_url(channel),
+        verify_token=channel.webhook_secret if channel.type == "whatsapp" else None,
     )
 
 
@@ -112,6 +122,34 @@ async def connect_telegram(
         await adapter.set_webhook(token, webhook_url(channel) or "", secret)
     except ChannelError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "telegram_token_invalid") from exc
+    return channel_out(channel)
+
+
+@router.post("/whatsapp", status_code=status.HTTP_201_CREATED)
+async def connect_whatsapp(body: WhatsAppIn, principal: Owner, db: TenantDb) -> ChannelOut:
+    # сам phone_number_id хранится только зашифрованным, для уникальности — его хеш
+    external_id = hashlib.sha256(body.phone_number_id.encode()).hexdigest()
+    existing = await db.scalar(
+        select(Channel.webhook_secret).where(
+            Channel.type == "whatsapp", Channel.external_id == external_id
+        )
+    )
+    credentials = {
+        "phone_number_id": body.phone_number_id,
+        "waba_id": body.waba_id,
+        "access_token": body.access_token.get_secret_value().strip(),
+        "app_secret": body.app_secret.get_secret_value().strip(),
+    }
+    channel = await upsert_channel(
+        db,
+        principal,
+        "whatsapp",
+        external_id,
+        credentials_enc=encrypt_json(credentials),
+        webhook_secret=existing or secrets.token_urlsafe(32),
+        status="pending",
+        last_error=None,
+    )
     return channel_out(channel)
 
 

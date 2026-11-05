@@ -4,7 +4,8 @@ import uuid
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import PlainTextResponse
 from redis.asyncio import Redis
 
 from app.channels.gateway import Gateway
@@ -12,6 +13,7 @@ from app.channels.http import read_body
 from app.channels.registry import get_adapters
 from app.channels.store import load_channel
 from app.channels.types import ChannelAdapter, ChannelConfig, IncomingMessage
+from app.channels.whatsapp import verify_signature
 from app.core.queue import Queue, get_queue
 from app.core.redis import get_redis
 
@@ -71,4 +73,31 @@ async def telegram_webhook(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid_secret")
     body = await read_body(request)
     await accept_all(gateway, channel, parse_payload(adapters["telegram"], channel, body))
+    return {"ok": True}
+
+
+@router.get("/whatsapp/{channel_id}", response_class=PlainTextResponse)
+async def whatsapp_verify(
+    channel_id: uuid.UUID,
+    mode: Annotated[str, Query(alias="hub.mode")] = "",
+    token: Annotated[str, Query(alias="hub.verify_token")] = "",
+    challenge: Annotated[str, Query(alias="hub.challenge", max_length=256)] = "",
+) -> str:
+    channel = await channel_of_type(channel_id, "whatsapp")
+    expected = channel.webhook_secret
+    if mode != "subscribe" or not expected or not secrets.compare_digest(token, expected):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "verification_failed")
+    return challenge
+
+
+@router.post("/whatsapp/{channel_id}")
+async def whatsapp_webhook(
+    channel_id: uuid.UUID,
+    request: Request,
+    signature: Annotated[str | None, Header(alias="X-Hub-Signature-256")] = None,
+) -> dict[str, bool]:
+    channel = await channel_of_type(channel_id, "whatsapp")
+    body = await read_body(request)
+    if not verify_signature(channel.credentials.get("app_secret", ""), body, signature):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid_signature")
     return {"ok": True}
