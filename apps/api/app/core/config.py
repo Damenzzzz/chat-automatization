@@ -60,6 +60,18 @@ class Settings(BaseSettings):
 
     pricing_kzt_per_usd: Decimal = Decimal(454)
 
+    billing_seller_name: str | None = None
+    billing_seller_iin: str | None = None
+    billing_seller_iik: str | None = None
+    billing_seller_bank: str | None = None
+    billing_seller_bik: str | None = None
+    billing_seller_kbe: str = "19"
+    billing_seller_knp: str = "859"
+    billing_seller_address: str | None = None
+    billing_seller_vat_note: str = "Без НДС"
+
+    analytics_timezone: str = "Asia/Almaty"
+
     public_api_url: str = "http://localhost:8100"
     public_web_url: str = "http://localhost:3000"
     channel_debounce_seconds: float = 1.5

@@ -1,7 +1,19 @@
 import uuid
 
+from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+
+from app.auth.identity import IdentityIn
+from app.cli import create_admin
+from tests.conftest import FakeSender, login, random_phone
+
+
+async def login_admin(client: AsyncClient, sender: FakeSender) -> uuid.UUID:
+    phone = random_phone()
+    user_id = await create_admin(IdentityIn(phone=phone))
+    await login(client, sender, phone)
+    return user_id
 
 
 async def topup(engine: AsyncEngine, tenant_id: uuid.UUID, amount: int) -> None:

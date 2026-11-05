@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import AsyncIterator
 from decimal import Decimal
 from typing import Any
 
@@ -8,12 +9,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.auth.identity import IdentityIn
 from app.billing.pricing import DEFAULT_MARKUP, Pricing, load_pricing, reply_price_kzt, turn_cost
-from app.cli import SATUSHY_TENANT_ID, create_admin
+from app.cli import SATUSHY_TENANT_ID
 from app.core.config import get_settings
 from app.db.session import tenant_session
 from app.llm.pricing import ModelPrice
+from tests.billing_helpers import login_admin
 from tests.conftest import FakeSender, create_user, login
 
 
@@ -59,16 +60,21 @@ def test_turn_cost_sums_all_calls_with_given_prices() -> None:
     assert turn_cost([], custom) == Decimal(0)
 
 
-@pytest.fixture
-async def admin(client: AsyncClient, sender: FakeSender, owner_engine: AsyncEngine) -> uuid.UUID:
-    phone = f"+7700{uuid.uuid4().int % 10**7:07}"
-    user_id = await create_admin(IdentityIn(phone=phone))
-    await login(client, sender, phone)
-    async with owner_engine.begin() as conn:
+async def _clear_global_pricing(engine: AsyncEngine) -> None:
+    async with engine.begin() as conn:
         await conn.execute(
             text("DELETE FROM pricing_settings WHERE tenant_id = :t"), {"t": SATUSHY_TENANT_ID}
         )
-    return user_id
+
+
+@pytest.fixture
+async def admin(
+    client: AsyncClient, sender: FakeSender, owner_engine: AsyncEngine
+) -> AsyncIterator[uuid.UUID]:
+    user_id = await login_admin(client, sender)
+    await _clear_global_pricing(owner_engine)
+    yield user_id
+    await _clear_global_pricing(owner_engine)
 
 
 async def _tenant(engine: AsyncEngine) -> uuid.UUID:

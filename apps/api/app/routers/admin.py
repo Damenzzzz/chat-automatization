@@ -1,6 +1,7 @@
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
@@ -11,11 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.cookies import set_access_cookie
 from app.auth.deps import CurrentUser, Principal, require_role
 from app.auth.tokens import AccessClaims, create_access_token
+from app.billing.ledger import get_balance, lock_ledger
 from app.billing.pricing import load_pricing
 from app.cli import SATUSHY_TENANT_ID
 from app.core.config import get_settings
 from app.db.session import tenant_session
-from app.models import AuditLog, PricingSettings, Tenant
+from app.models import AuditLog, LedgerEntry, Payment, PricingSettings, Tenant
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -94,6 +96,78 @@ async def put_pricing(body: PricingIn, admin: Admin) -> PricingOut:
 @router.put("/tenants/{tenant_id}/pricing")
 async def put_tenant_pricing(tenant_id: uuid.UUID, body: PricingIn, admin: Admin) -> PricingOut:
     return await _save_pricing(tenant_id, body, admin)
+
+
+class TopupIn(BaseModel):
+    amount_kzt: int | None = Field(default=None, gt=0, le=1_000_000_000)
+    invoice_no: str | None = Field(default=None, max_length=64)
+    provider: Literal["invoice", "kaspi"] = "invoice"
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class TopupOut(BaseModel):
+    payment_id: uuid.UUID
+    invoice_no: str | None
+    amount_kzt: int
+    balance_kzt: int
+
+
+async def _payment_for_topup(session: AsyncSession, tenant_id: uuid.UUID, body: TopupIn) -> Payment:
+    if body.invoice_no is None:
+        if body.amount_kzt is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "amount_required")
+        created = Payment(tenant_id=tenant_id, provider=body.provider, amount_kzt=body.amount_kzt)
+        session.add(created)
+        return created
+    payment = await session.scalar(
+        select(Payment).where(Payment.invoice_no == body.invoice_no).with_for_update()
+    )
+    if payment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "invoice_not_found")
+    if payment.status == "paid":
+        raise HTTPException(status.HTTP_409_CONFLICT, "invoice_already_paid")
+    if payment.status != "pending":
+        raise HTTPException(status.HTTP_409_CONFLICT, "invoice_not_payable")
+    if body.amount_kzt is not None and body.amount_kzt != payment.amount_kzt:
+        raise HTTPException(status.HTTP_409_CONFLICT, "amount_mismatch")
+    return payment
+
+
+@router.post("/tenants/{tenant_id}/topup", status_code=status.HTTP_201_CREATED)
+async def topup(tenant_id: uuid.UUID, body: TopupIn, admin: Admin) -> TopupOut:
+    async with tenant_session(tenant_id) as session:
+        if await session.scalar(select(Tenant.id).where(Tenant.id == tenant_id)) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "tenant_not_found")
+        await lock_ledger(session, tenant_id)
+        payment = await _payment_for_topup(session, tenant_id, body)
+        payment.status = "paid"
+        payment.paid_at = datetime.now(UTC)
+        payment.confirmed_by = admin.user_id
+        await session.flush()
+        session.add(
+            LedgerEntry(
+                tenant_id=tenant_id,
+                type="topup",
+                amount_kzt=payment.amount_kzt,
+                payment_id=payment.id,
+                comment=body.comment,
+            )
+        )
+        session.add(
+            AuditLog(
+                tenant_id=tenant_id,
+                actor_id=admin.user_id,
+                action="billing.topup",
+                details={"amount_kzt": payment.amount_kzt, "invoice_no": payment.invoice_no},
+            )
+        )
+        await session.flush()
+        return TopupOut(
+            payment_id=payment.id,
+            invoice_no=payment.invoice_no,
+            amount_kzt=payment.amount_kzt,
+            balance_kzt=await get_balance(session),
+        )
 
 
 class ImpersonationOut(BaseModel):
