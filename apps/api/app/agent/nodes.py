@@ -1,7 +1,6 @@
 import time
 import uuid
 from dataclasses import dataclass, field
-from decimal import Decimal
 from typing import Any, Protocol
 
 import structlog
@@ -23,6 +22,7 @@ from app.agent.understand import (
     merge_slots,
     router_messages,
 )
+from app.billing.ledger import charge_reply, reply_cost
 from app.channels.outgoing import mentioned_products, product_card
 from app.channels.types import ChannelError, Media, OutgoingMessage, ProductCard
 from app.core.config import get_settings
@@ -100,6 +100,7 @@ class AgentNodes:
             "human_mode": mode == "human",
             "customer_message_id": str(message.id),
             "voice_failed": False,
+            "send_failed": False,
             "context": [],
             "tool_hops": 0,
             "retries": 0,
@@ -438,7 +439,7 @@ class AgentNodes:
         except ChannelError as exc:
             log.warning("agent.send_failed", channel_id=channel_id, error=str(exc))
             trace = step(state, "send", delivered=False, error=str(exc))
-            return {"reply": reply, "trace": trace}
+            return {"reply": reply, "send_failed": True, "trace": trace}
         trace = step(state, "send", delivered=True, cards=len(message.cards))
         return {"reply": reply, "trace": trace}
 
@@ -450,36 +451,52 @@ class AgentNodes:
         found = any(c["type"] in ("product", "kb") for c in state.get("context", []))
         return state.get("intent") in ("product", "policy") and not found
 
+    def billable(self, state: ChatState) -> bool:
+        skip = state.get("sandbox") or state.get("send_failed")
+        return bool(state.get("usage")) and not skip
+
     async def meter(self, state: ChatState) -> dict[str, Any]:
         usage = state.get("usage", [])
         unanswered = self.unanswered(state)
         trace = step(state, "meter", unanswered=unanswered, sandbox=bool(state.get("sandbox")))
         replies = [u for u in usage if u["node"] == "respond"]
-        cost = sum((Decimal(u["cost_usd"]) for u in usage if u.get("cost_usd")), Decimal(0))
         latency = round((time.time() - state.get("started_at", time.time())) * 1000)
         conversation_id = uuid.UUID(state["conversation_id"])
         reply = state.get("reply")
+        model = replies[-1]["model"] if replies else None
         async with tenant_session(self.tenant(state)) as session:
-            session.add(
-                Message(
-                    tenant_id=self.tenant(state),
-                    conversation_id=conversation_id,
-                    role="bot",
-                    content=reply,
-                    model=replies[-1]["model"] if replies else None,
-                    tokens_in=sum(u["tokens_in"] for u in usage),
-                    tokens_out=sum(u["tokens_out"] for u in usage),
-                    cached_tokens=sum(u["cached_tokens"] for u in usage),
-                    cost_usd=cost,
-                    latency_ms=latency,
-                    trace={
-                        "lang": state.get("lang"),
-                        "intent": state.get("intent"),
-                        "steps": trace,
-                        "llm_calls": usage,
-                    },
-                )
+            cost = await reply_cost(session, usage)
+            message = Message(
+                tenant_id=self.tenant(state),
+                conversation_id=conversation_id,
+                role="bot",
+                content=reply,
+                model=model,
+                tokens_in=sum(u["tokens_in"] for u in usage),
+                tokens_out=sum(u["tokens_out"] for u in usage),
+                cached_tokens=sum(u["cached_tokens"] for u in usage),
+                cost_usd=cost,
+                latency_ms=latency,
+                trace={
+                    "lang": state.get("lang"),
+                    "intent": state.get("intent"),
+                    "steps": trace,
+                    "llm_calls": usage,
+                },
             )
+            session.add(message)
+            await session.flush()
+            if self.billable(state):
+                charge = await charge_reply(
+                    session, self.tenant(state), message.id, usage, model, cost
+                )
+                charged = {
+                    "price_kzt": charge.price_kzt,
+                    "charged_kzt": charge.charged_kzt,
+                    "balance_kzt": charge.balance_after,
+                }
+                trace = [*trace[:-1], {**trace[-1], "charge": charged}]
+                message.trace = {**(message.trace or {}), "steps": trace}
             if unanswered:
                 session.add(
                     Unanswered(

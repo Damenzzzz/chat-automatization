@@ -14,6 +14,7 @@ class ChatState(TypedDict, total=False):
     media: list[dict[str, Any]]
     customer_message_id: str
     voice_failed: bool
+    send_failed: bool
     human_mode: bool
     sandbox: bool
     messages: Annotated[list[AnyMessage], add_messages]
