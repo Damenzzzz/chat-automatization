@@ -6,6 +6,7 @@ from app.core.crypto import CryptoError
 from app.core.logging import configure_logging
 from app.routers import (
     admin,
+    analytics,
     auth,
     billing,
     bot_profile,
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(debug.router)
     app.include_router(sandbox.router)
     app.include_router(bot_profile.router)
+    app.include_router(analytics.router)
     app.include_router(billing.router)
     app.include_router(notifications.router)
     app.include_router(channels.router)
