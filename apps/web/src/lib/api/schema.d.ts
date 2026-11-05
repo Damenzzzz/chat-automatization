@@ -993,6 +993,39 @@ export interface components {
             /** Image */
             image: string | null;
         };
+        /** CatalogProduct */
+        CatalogProduct: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Sku */
+            sku: string | null;
+            /** Category */
+            category: string | null;
+            /** Description */
+            description: string | null;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Price */
+            price: number | null;
+            /** Stock */
+            stock: number | null;
+            /** Images */
+            images: string[];
+            /** Indexed */
+            indexed: boolean;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** ChannelOut */
         ChannelOut: {
             /**
@@ -1206,7 +1239,7 @@ export interface components {
                 [key: string]: number;
             };
             /** Products */
-            products: components["schemas"]["app__routers__debug__ProductOut"][];
+            products: components["schemas"]["ProductOut"][];
             /** Kb */
             kb: components["schemas"]["KbOut"][];
         };
@@ -1580,7 +1613,35 @@ export interface components {
             /** Total */
             total: number;
             /** Items */
-            items: components["schemas"]["app__routers__products__ProductOut"][];
+            items: components["schemas"]["CatalogProduct"][];
+        };
+        /** ProductOut */
+        ProductOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sku */
+            sku: string | null;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string | null;
+            /** Price */
+            price: number | null;
+            /** Stock */
+            stock: number | null;
+            /** Reasons */
+            reasons: string[];
+            /** Ranks */
+            ranks: {
+                [key: string]: number;
+            };
+            /** Rrf */
+            rrf: number;
+            /** Score */
+            score: number | null;
         };
         /** ProfileIn */
         ProfileIn: {
@@ -1864,67 +1925,6 @@ export interface components {
              * Format: password
              */
             app_secret: string;
-        };
-        /** ProductOut */
-        app__routers__debug__ProductOut: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Sku */
-            sku: string | null;
-            /** Name */
-            name: string;
-            /** Category */
-            category: string | null;
-            /** Price */
-            price: number | null;
-            /** Stock */
-            stock: number | null;
-            /** Reasons */
-            reasons: string[];
-            /** Ranks */
-            ranks: {
-                [key: string]: number;
-            };
-            /** Rrf */
-            rrf: number;
-            /** Score */
-            score: number | null;
-        };
-        /** ProductOut */
-        app__routers__products__ProductOut: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Sku */
-            sku: string | null;
-            /** Category */
-            category: string | null;
-            /** Description */
-            description: string | null;
-            /** Attributes */
-            attributes: {
-                [key: string]: unknown;
-            };
-            /** Price */
-            price: number | null;
-            /** Stock */
-            stock: number | null;
-            /** Images */
-            images: string[];
-            /** Indexed */
-            indexed: boolean;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
         };
     };
     responses: never;

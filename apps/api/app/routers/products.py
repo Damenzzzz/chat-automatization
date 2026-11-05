@@ -14,7 +14,7 @@ router = APIRouter(prefix="/products", tags=["catalog"])
 Member = Annotated[Principal, Depends(require_role("owner", "manager"))]
 
 
-class ProductOut(BaseModel):
+class CatalogProduct(BaseModel):
     id: uuid.UUID
     name: str
     sku: str | None
@@ -30,7 +30,7 @@ class ProductOut(BaseModel):
 
 class ProductList(BaseModel):
     total: int
-    items: list[ProductOut]
+    items: list[CatalogProduct]
 
 
 @router.get("")
@@ -71,5 +71,6 @@ async def list_products(
         .offset(offset)
     )
     return ProductList(
-        total=total or 0, items=[ProductOut.model_validate(r, from_attributes=True) for r in rows]
+        total=total or 0,
+        items=[CatalogProduct.model_validate(r, from_attributes=True) for r in rows],
     )
