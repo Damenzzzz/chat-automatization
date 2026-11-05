@@ -15,6 +15,7 @@ class ChatState(TypedDict, total=False):
     customer_message_id: str
     voice_failed: bool
     send_failed: bool
+    paused: str | None
     human_mode: bool
     sandbox: bool
     messages: Annotated[list[AnyMessage], add_messages]

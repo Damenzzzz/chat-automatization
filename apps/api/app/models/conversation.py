@@ -46,6 +46,7 @@ class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):
     __table_args__ = (
         CheckConstraint("mode IN ('bot', 'human')", name="mode"),
         CheckConstraint("status IN ('open', 'closed')", name="status"),
+        CheckConstraint("paused_reason IN ('no_balance', 'rate_limit')", name="paused_reason"),
         Index("ix_conversations_tenant_id_last_message_at", "tenant_id", "last_message_at"),
         Index(
             "uq_conversations_open",
@@ -66,6 +67,7 @@ class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):
     mode: Mapped[str] = mapped_column(String(8), server_default="bot")
     status: Mapped[str] = mapped_column(String(8), server_default="open")
     sandbox: Mapped[bool] = mapped_column(Boolean, server_default=sql_text("false"))
+    paused_reason: Mapped[str | None] = mapped_column(String(16))
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 

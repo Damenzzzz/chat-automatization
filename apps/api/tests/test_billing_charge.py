@@ -57,7 +57,7 @@ async def _ledger_row(engine: AsyncEngine, tenant_id: uuid.UUID) -> Any:
 
 
 async def test_bot_reply_is_charged_with_cost_and_message(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     await topup(owner_engine, tenant_id, 1000)
     agent, _ = await make_agent(llm=_llm())
 
@@ -80,7 +80,7 @@ async def test_bot_reply_is_charged_with_cost_and_message(owner_engine: AsyncEng
 
 
 async def test_sandbox_never_charges(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     await topup(owner_engine, tenant_id, 1000)
     agent, _ = await make_agent(llm=_llm())
     await agent.run(
@@ -90,7 +90,7 @@ async def test_sandbox_never_charges(owner_engine: AsyncEngine) -> None:
 
 
 async def test_reply_without_llm_calls_is_free(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     await topup(owner_engine, tenant_id, 1000)
     agent, _ = await make_agent(llm=None)
     await agent.run(tenant_id=tenant_id, conversation_id=conversation_id, text="привет")
@@ -98,7 +98,7 @@ async def test_reply_without_llm_calls_is_free(owner_engine: AsyncEngine) -> Non
 
 
 async def test_undelivered_reply_is_not_charged(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     channel_id = await make_channel(owner_engine, tenant_id)
     await topup(owner_engine, tenant_id, 1000)
     outbound = Outbound({"telegram": RecordingAdapter(fail=True)})
@@ -122,7 +122,7 @@ async def _charge(tenant_id: uuid.UUID, conversation_id: uuid.UUID, cost: Decima
 
 
 async def test_charge_never_takes_balance_below_zero(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     await topup(owner_engine, tenant_id, 2)
 
     charge = await _charge(tenant_id, conversation_id, Decimal("1"))
@@ -135,7 +135,7 @@ async def test_charge_never_takes_balance_below_zero(owner_engine: AsyncEngine) 
 
 
 async def test_empty_balance_writes_no_ledger_row(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     charge = await _charge(tenant_id, conversation_id, Decimal("1"))
     assert charge.charged_kzt == 0
     assert await charges(owner_engine, tenant_id) == []
@@ -143,7 +143,7 @@ async def test_empty_balance_writes_no_ledger_row(owner_engine: AsyncEngine) -> 
 
 
 async def test_concurrent_charges_cannot_overdraw(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     await topup(owner_engine, tenant_id, 10)
     cost = Decimal("0.001")
     price = reply_price_kzt(cost, PricingValue(Decimal(3), Decimal(454)))
@@ -156,8 +156,8 @@ async def test_concurrent_charges_cannot_overdraw(owner_engine: AsyncEngine) -> 
 
 
 async def test_balance_is_ledger_sum_within_tenant(owner_engine: AsyncEngine) -> None:
-    tenant_a, _ = await make_conversation(owner_engine)
-    tenant_b, _ = await make_conversation(owner_engine)
+    tenant_a, _ = await make_conversation(owner_engine, funds=0)
+    tenant_b, _ = await make_conversation(owner_engine, funds=0)
     await topup(owner_engine, tenant_a, 700)
     await topup(owner_engine, tenant_b, 50)
     async with tenant_session(tenant_a) as session:
@@ -165,7 +165,7 @@ async def test_balance_is_ledger_sum_within_tenant(owner_engine: AsyncEngine) ->
 
 
 async def test_price_estimate_averages_recent_charges(owner_engine: AsyncEngine) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
+    tenant_id, conversation_id = await make_conversation(owner_engine, funds=0)
     await topup(owner_engine, tenant_id, 1000)
     async with tenant_session(tenant_id) as session:
         assert await estimated_reply_price(session) == 1

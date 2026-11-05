@@ -22,7 +22,8 @@ from app.agent.understand import (
     merge_slots,
     router_messages,
 )
-from app.billing.ledger import charge_reply, reply_cost
+from app.billing.alerts import NOTIFY_OWNER, balance_alert
+from app.billing.ledger import charge_reply, estimated_reply_price, get_balance, reply_cost
 from app.channels.outgoing import mentioned_products, product_card
 from app.channels.types import ChannelError, Media, OutgoingMessage, ProductCard
 from app.core.config import get_settings
@@ -31,12 +32,18 @@ from app.db.session import tenant_session
 from app.llm import LLM, LLMError, ToolCall
 from app.mlclient import MLError, Transcript
 from app.models import Conversation, Message, Product, Unanswered
+from app.search.lang import detect_lang
 from app.search.types import SearchML
 
 log = structlog.get_logger()
 
 
 VOICE_PLACEHOLDER = "[голосовое сообщение]"
+PAUSE_REPLY = {
+    "ru": "Спасибо за сообщение! Менеджер скоро вам ответит.",
+    "kk": "Хабарламаңызға рақмет! Менеджер жақын арада жауап береді.",
+}
+PAUSE_REASONS = {"no_balance": "баланс магазина закончился"}
 
 
 class AgentML(SearchML, Protocol):
@@ -101,6 +108,7 @@ class AgentNodes:
             "customer_message_id": str(message.id),
             "voice_failed": False,
             "send_failed": False,
+            "paused": None,
             "context": [],
             "tool_hops": 0,
             "retries": 0,
@@ -166,6 +174,34 @@ class AgentNodes:
             "trace": step(
                 state, "guard_in", human_mode=bool(state.get("human_mode")), flagged=flagged
             ),
+        }
+
+    async def pause_reason(self, state: ChatState) -> str | None:
+        async with tenant_session(self.tenant(state)) as session:
+            balance = await get_balance(session)
+            if balance <= 0 or balance < await estimated_reply_price(session):
+                return "no_balance"
+        return None
+
+    async def gate(self, state: ChatState) -> dict[str, Any]:
+        reason = await self.pause_reason(state)
+        if reason is None:
+            return {"paused": None, "trace": step(state, "gate", ok=True)}
+        await self.toolbox(state).handoff(PAUSE_REASONS[reason])
+        async with tenant_session(self.tenant(state)) as session:
+            await session.execute(
+                update(Conversation)
+                .where(Conversation.id == uuid.UUID(state["conversation_id"]))
+                .values(paused_reason=reason)
+            )
+        lang = detect_lang(last_human(state)) or "ru"
+        return {
+            "messages": [AIMessage(PAUSE_REPLY["kk" if lang == "kk" else "ru"])],
+            "paused": reason,
+            "human_mode": True,
+            "intent": None,
+            "lang": lang,
+            "trace": step(state, "gate", ok=False, reason=reason),
         }
 
     async def understand(self, state: ChatState) -> dict[str, Any]:
@@ -444,6 +480,8 @@ class AgentNodes:
         return {"reply": reply, "trace": trace}
 
     def unanswered(self, state: ChatState) -> bool:
+        if state.get("paused"):
+            return False
         if any(t["node"] in ("fallback",) for t in state.get("trace", [])):
             return True
         if any(t.get("source") == "no_llm" for t in state.get("trace", [])):
@@ -464,6 +502,7 @@ class AgentNodes:
         conversation_id = uuid.UUID(state["conversation_id"])
         reply = state.get("reply")
         model = replies[-1]["model"] if replies else None
+        alert: str | None = None
         async with tenant_session(self.tenant(state)) as session:
             cost = await reply_cost(session, usage)
             message = Message(
@@ -497,6 +536,7 @@ class AgentNodes:
                 }
                 trace = [*trace[:-1], {**trace[-1], "charge": charged}]
                 message.trace = {**(message.trace or {}), "steps": trace}
+                alert = await balance_alert(session, self.tenant(state), charge)
             if unanswered:
                 session.add(
                     Unanswered(
@@ -506,4 +546,6 @@ class AgentNodes:
                         answer=reply,
                     )
                 )
+        if alert:
+            await self.deps.queue.enqueue(NOTIFY_OWNER, state["tenant_id"], alert)
         return {"trace": trace}

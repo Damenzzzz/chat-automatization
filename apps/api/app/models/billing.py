@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -34,6 +35,16 @@ class PricingSettings(IdMixin, TimestampMixin, TenantMixin, Base):
     model_prices: Mapped[dict[str, Any]] = mapped_column(
         JSONB, server_default=sql_text("'{}'::jsonb")
     )
+
+
+class Notification(IdMixin, TimestampMixin, TenantMixin, Base):
+    __tablename__ = "notifications"
+    __table_args__ = (Index("ix_notifications_tenant_id_created_at", "tenant_id", "created_at"),)
+
+    kind: Mapped[str] = mapped_column(String(32))
+    text: Mapped[str] = mapped_column(Text)
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=sql_text("'{}'::jsonb"))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Payment(IdMixin, TimestampMixin, TenantMixin, Base):

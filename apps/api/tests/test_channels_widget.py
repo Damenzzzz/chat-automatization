@@ -29,6 +29,10 @@ HEADERS = {"Origin": ORIGIN, "X-Widget-Session": SESSION}
 async def key(owner_engine: AsyncEngine, client: AsyncClient) -> str:
     async with owner_engine.begin() as conn:
         tenant = await conn.scalar(text("INSERT INTO tenants (name) VALUES ('Т') RETURNING id"))
+        await conn.execute(
+            text("INSERT INTO ledger (tenant_id, type, amount_kzt) VALUES (:t, 'topup', 100000)"),
+            {"t": tenant},
+        )
     value = uuid.uuid4().hex
     await make_channel(
         owner_engine,

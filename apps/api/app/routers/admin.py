@@ -1,11 +1,11 @@
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import CursorResult, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,7 @@ from app.billing.pricing import load_pricing
 from app.cli import SATUSHY_TENANT_ID
 from app.core.config import get_settings
 from app.db.session import tenant_session
-from app.models import AuditLog, LedgerEntry, Payment, PricingSettings, Tenant
+from app.models import AuditLog, Conversation, LedgerEntry, Payment, PricingSettings, Tenant
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -110,6 +110,7 @@ class TopupOut(BaseModel):
     invoice_no: str | None
     amount_kzt: int
     balance_kzt: int
+    resumed_conversations: int
 
 
 async def _payment_for_topup(session: AsyncSession, tenant_id: uuid.UUID, body: TopupIn) -> Payment:
@@ -162,11 +163,21 @@ async def topup(tenant_id: uuid.UUID, body: TopupIn, admin: Admin) -> TopupOut:
             )
         )
         await session.flush()
+        current = await get_balance(session)
+        resumed = 0
+        if current > 0:
+            result = await session.execute(
+                update(Conversation)
+                .where(Conversation.paused_reason == "no_balance", Conversation.mode == "human")
+                .values(mode="bot", paused_reason=None)
+            )
+            resumed = cast("CursorResult[Any]", result).rowcount
         return TopupOut(
             payment_id=payment.id,
             invoice_no=payment.invoice_no,
             amount_kzt=payment.amount_kzt,
-            balance_kzt=await get_balance(session),
+            balance_kzt=current,
+            resumed_conversations=resumed,
         )
 
 

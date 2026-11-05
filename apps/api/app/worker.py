@@ -8,6 +8,7 @@ from arq.connections import RedisSettings
 from app.agent.checkpoint import close_checkpointer, get_checkpointer
 from app.agent.nodes import AgentDeps
 from app.agent.runtime import Agent
+from app.billing.alerts import NOTIFY_OWNER, send_owner_message
 from app.catalog.ingest import run_ingest
 from app.catalog.reindex import reindex_tenant, tenants_needing_reindex
 from app.channels.gateway import FLUSH
@@ -63,6 +64,10 @@ async def notify_manager(
     log.info("manager.notify", tenant_id=tenant_id, notification=event, **payload)
 
 
+async def notify_owner(ctx: dict[str, Any], tenant_id: str, text: str) -> int:
+    return await send_owner_message(uuid.UUID(tenant_id), text, get_adapters())
+
+
 async def flush_customer(
     ctx: dict[str, Any], tenant_id: str, channel_id: str, key: str, seq: int
 ) -> str:
@@ -97,6 +102,7 @@ class WorkerSettings:
         ping,
         ingest_catalog,
         notify_manager,
+        func(notify_owner, name=NOTIFY_OWNER),
         func(flush_customer, name=FLUSH, keep_result=0, max_tries=FLUSH_MAX_TRIES),
         func(reindex_embeddings, name=REINDEX, keep_result=0),
     ]

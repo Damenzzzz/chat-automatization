@@ -15,6 +15,7 @@ async def test_smalltalk_path(owner_engine: AsyncEngine) -> None:
     assert nodes(result.trace) == [
         "ingest",
         "guard_in",
+        "gate",
         "understand",
         "respond",
         "guard_out",

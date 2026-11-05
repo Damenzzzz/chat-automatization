@@ -6,17 +6,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import structlog
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.queue import get_queue
 from app.db.session import tenant_session
-from app.models import BotProfile, KbChunk, Product, Tenant
+from app.models import BotProfile, KbChunk, LedgerEntry, Product, Tenant
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 DEMO_TENANT_ID = uuid.UUID("7e1a1700-0000-4000-8000-00000000a001")
+DEMO_BALANCE_KZT = 50_000
 
 log = structlog.get_logger()
 
@@ -89,6 +90,19 @@ async def seed_demo() -> SeedResult:
                 },
             )
         )
+
+        funded = await session.scalar(
+            select(LedgerEntry.id).where(LedgerEntry.type == "topup").limit(1)
+        )
+        if funded is None:
+            session.add(
+                LedgerEntry(
+                    tenant_id=DEMO_TENANT_ID,
+                    type="topup",
+                    amount_kzt=DEMO_BALANCE_KZT,
+                    comment="демо-магазин",
+                )
+            )
 
         sources = [item["source"] for item in kb]
         await session.execute(delete(KbChunk).where(KbChunk.source.in_(sources)))

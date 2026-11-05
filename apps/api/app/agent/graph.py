@@ -20,6 +20,7 @@ NODES = (
     "ingest",
     "transcribe",
     "guard_in",
+    "gate",
     "understand",
     "retrieve",
     "kb",
@@ -43,7 +44,13 @@ def after_ingest(state: ChatState) -> str:
 
 
 def after_guard_in(state: ChatState) -> str:
-    return END if state.get("human_mode") else "understand"
+    if state.get("human_mode"):
+        return END
+    return "understand" if state.get("sandbox") else "gate"
+
+
+def after_gate(state: ChatState) -> str:
+    return "send" if state.get("paused") else "understand"
 
 
 def after_understand(state: ChatState) -> str:
@@ -72,7 +79,8 @@ def build_graph(
     g.add_edge(START, "ingest")
     g.add_conditional_edges("ingest", after_ingest, ["transcribe", "guard_in"])
     g.add_edge("transcribe", "guard_in")
-    g.add_conditional_edges("guard_in", after_guard_in, [END, "understand"])
+    g.add_conditional_edges("guard_in", after_guard_in, [END, "gate", "understand"])
+    g.add_conditional_edges("gate", after_gate, ["send", "understand"])
     g.add_conditional_edges("understand", after_understand, sorted(set(INTENT_ROUTES.values())))
     for name in ("retrieve", "kb", "order", "handoff"):
         g.add_edge(name, "respond")

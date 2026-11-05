@@ -48,6 +48,7 @@ class User(IdMixin, TimestampMixin, TenantMixin, Base):
     name: Mapped[str | None] = mapped_column(String(200))
     role: Mapped[str] = mapped_column(String(16))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(32))
 
 
 class BotProfile(IdMixin, TimestampMixin, TenantMixin, Base):

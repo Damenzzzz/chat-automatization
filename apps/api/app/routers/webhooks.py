@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from fastapi.responses import PlainTextResponse
 from redis.asyncio import Redis
 
+from app.billing.alerts import NOTIFY_OWNER, link_owner, owner_link_token
 from app.channels.gateway import Gateway
 from app.channels.http import read_body
 from app.channels.registry import get_adapters
@@ -18,6 +19,7 @@ from app.core.queue import Queue, get_queue
 from app.core.redis import get_redis
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+OWNER_LINKED = "Готово: уведомления о балансе Satushy будут приходить в этот чат."
 log = structlog.get_logger()
 
 
@@ -59,6 +61,19 @@ async def accept_all(
         await gateway.accept(channel, message)
 
 
+async def handle_owner_link(gateway: Gateway, channel: ChannelConfig, body: bytes) -> bool:
+    try:
+        link = owner_link_token(json.loads(body))
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+    if link is None:
+        return False
+    token, chat_id = link
+    if await link_owner(gateway.redis, channel.tenant_id, token, chat_id):
+        await gateway.queue.enqueue(NOTIFY_OWNER, str(channel.tenant_id), OWNER_LINKED)
+    return True
+
+
 @router.post("/telegram/{channel_id}")
 async def telegram_webhook(
     channel_id: uuid.UUID,
@@ -72,6 +87,8 @@ async def telegram_webhook(
     if not expected or not secret or not secrets.compare_digest(secret, expected):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid_secret")
     body = await read_body(request)
+    if await handle_owner_link(gateway, channel, body):
+        return {"ok": True}
     await accept_all(gateway, channel, parse_payload(adapters["telegram"], channel, body))
     return {"ok": True}
 

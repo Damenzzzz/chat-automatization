@@ -61,12 +61,20 @@ class FakeML:
 
 
 async def make_shop(
-    engine: AsyncEngine, products: list[dict[str, Any]], kb: list[dict[str, str]] | None = None
+    engine: AsyncEngine,
+    products: list[dict[str, Any]],
+    kb: list[dict[str, str]] | None = None,
+    funds: int = 1_000_000,
 ) -> uuid.UUID:
     async with engine.begin() as conn:
         tenant_id: uuid.UUID = await conn.scalar(
             text("INSERT INTO tenants (name) VALUES ('Поиск') RETURNING id")
         )
+        if funds:
+            await conn.execute(
+                text("INSERT INTO ledger (tenant_id, type, amount_kzt) VALUES (:t, 'topup', :a)"),
+                {"t": tenant_id, "a": funds},
+            )
         for item in products:
             row = {"sku": None, "category": None, "description": None, "stock": 5, **item}
             vector = embed_text(

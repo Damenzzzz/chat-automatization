@@ -12,13 +12,23 @@ from tests.fake_ml import FakeML
 
 
 async def make_conversation(
-    engine: AsyncEngine, tenant_id: uuid.UUID | None = None, mode: str = "bot"
+    engine: AsyncEngine,
+    tenant_id: uuid.UUID | None = None,
+    mode: str = "bot",
+    funds: int = 1_000_000,
 ) -> tuple[uuid.UUID, uuid.UUID]:
     async with engine.begin() as conn:
         if tenant_id is None:
             tenant_id = await conn.scalar(
                 text("INSERT INTO tenants (name) VALUES ('Цветы') RETURNING id")
             )
+            if funds:
+                await conn.execute(
+                    text(
+                        "INSERT INTO ledger (tenant_id, type, amount_kzt) VALUES (:t, 'topup', :a)"
+                    ),
+                    {"t": tenant_id, "a": funds},
+                )
         customer_id = await conn.scalar(
             text(
                 "INSERT INTO customers (tenant_id, channel, external_id) "
