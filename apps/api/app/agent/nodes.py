@@ -499,7 +499,13 @@ class AgentNodes:
             log.warning("agent.send_failed", channel_id=channel_id, error=str(exc))
             trace = step(state, "send", delivered=False, error=str(exc))
             return {"reply": reply, "send_failed": True, "trace": trace}
-        trace = step(state, "send", delivered=True, cards=len(message.cards))
+        trace = step(
+            state,
+            "send",
+            delivered=True,
+            cards=len(message.cards),
+            products=mentioned_products(reply, state.get("context", [])),
+        )
         return {"reply": reply, "trace": trace}
 
     def unanswered(self, state: ChatState) -> bool:
@@ -560,6 +566,11 @@ class AgentNodes:
                 trace = [*trace[:-1], {**trace[-1], "charge": charged}]
                 message.trace = {**(message.trace or {}), "steps": trace}
                 alert = await balance_alert(session, self.tenant(state), charge)
+            await session.execute(
+                update(Conversation)
+                .where(Conversation.id == conversation_id)
+                .values(last_message_at=func.now())
+            )
             if unanswered:
                 session.add(
                     Unanswered(

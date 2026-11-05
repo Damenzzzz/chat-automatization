@@ -12,8 +12,10 @@ from app.routers import (
     bot_profile,
     catalog,
     channels,
+    conversations,
     debug,
     ingest_jobs,
+    leads,
     me,
     notifications,
     sandbox,
@@ -55,6 +57,8 @@ def create_app() -> FastAPI:
     app.include_router(billing.router)
     app.include_router(notifications.router)
     app.include_router(channels.router)
+    app.include_router(conversations.router)
+    app.include_router(leads.router)
     app.include_router(webhooks.router)
     app.include_router(widget.router)
     return app

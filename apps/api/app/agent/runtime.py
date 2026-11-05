@@ -3,7 +3,8 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any
 
 from fastapi import Depends
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.agent.checkpoint import get_checkpointer
@@ -65,6 +66,11 @@ class Agent:
             trace=state.get("trace", []),
             usage=state.get("usage", []),
         )
+
+    async def remember_manager_reply(self, conversation_id: uuid.UUID, text: str) -> None:
+        config: RunnableConfig = {"configurable": {"thread_id": str(conversation_id)}}
+        if (await self.graph.aget_state(config)).values:
+            await self.graph.aupdate_state(config, {"messages": [AIMessage(text)]}, as_node="meter")
 
 
 async def get_agent(
