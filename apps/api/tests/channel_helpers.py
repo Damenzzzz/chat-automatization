@@ -22,7 +22,7 @@ async def make_channel(
     *,
     type_: str = "telegram",
     status: str = "active",
-    secret: str | None = "secret",  # noqa: S107
+    secret: str | None = "secret",
     credentials: dict[str, str] | None = None,
     public_key: str | None = None,
     domain: str | None = None,
