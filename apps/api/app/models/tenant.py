@@ -32,6 +32,8 @@ class Tenant(IdMixin, TimestampMixin, Base):
     city: Mapped[str | None] = mapped_column(String(100))
     plan: Mapped[str] = mapped_column(String(32), server_default="trial")
     status: Mapped[str] = mapped_column(String(32), server_default="onboarding")
+    links: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    onboarding_step: Mapped[int] = mapped_column(Integer, server_default="1")
 
 
 class User(IdMixin, TimestampMixin, TenantMixin, Base):
