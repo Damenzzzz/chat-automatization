@@ -18,6 +18,7 @@ from app.routers import (
     notifications,
     sandbox,
     team,
+    unanswered,
     webhooks,
     widget,
 )
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(sandbox.router)
     app.include_router(bot_profile.router)
     app.include_router(analytics.router)
+    app.include_router(unanswered.router)
     app.include_router(billing.router)
     app.include_router(notifications.router)
     app.include_router(channels.router)
