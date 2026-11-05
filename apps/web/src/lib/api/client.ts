@@ -18,6 +18,7 @@ function refreshSession(): Promise<boolean> {
 
 export function goToLogin() {
   const next = window.location.pathname + window.location.search;
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- нужна полная перезагрузка: сбросить сессию
   window.location.href = `/login?next=${encodeURIComponent(next)}`;
 }
 

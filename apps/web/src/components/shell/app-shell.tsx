@@ -52,6 +52,7 @@ function useWaiting(): number {
 
 async function logout() {
   await fetch("/auth/logout", { method: "POST" });
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- нужна полная перезагрузка: сбросить сессию
   window.location.href = "/login";
 }
 
@@ -177,6 +178,7 @@ function Banners() {
             onClick={async () => {
               setLeaving(true);
               await api.DELETE("/admin/impersonate");
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- нужна полная перезагрузка: сбросить сессию
               window.location.href = "/overview";
             }}
           >
