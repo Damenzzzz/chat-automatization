@@ -72,6 +72,7 @@ class Settings(BaseSettings):
 
     analytics_timezone: str = "Asia/Almaty"
     bot_replies_per_hour: int = 30
+    unanswered_group_threshold: float = 0.85
 
     public_api_url: str = "http://localhost:8100"
     public_web_url: str = "http://localhost:3000"
