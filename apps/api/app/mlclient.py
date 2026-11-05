@@ -1,6 +1,7 @@
 import asyncio
 import random
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -18,6 +19,15 @@ Sleep = Callable[[float], Awaitable[None]]
 
 class MLError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class Transcript:
+    text: str
+    language: str | None = None
+    language_probability: float | None = None
+    duration: float | None = None
+    model: str | None = None
 
 
 def _retryable(exc: BaseException) -> bool:
@@ -44,13 +54,18 @@ class MLClient:
         self._transport = transport
         self._sleep = sleep
 
-    async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _post(
+        self,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        files: dict[str, tuple[str, bytes, str]] | None = None,
+    ) -> dict[str, Any]:
         async with httpx.AsyncClient(
             base_url=self.base_url, timeout=self.timeout, transport=self._transport
         ) as http:
             for attempt in range(self.max_retries + 1):
                 try:
-                    response = await http.post(path, json=payload)
+                    response = await http.post(path, json=payload, files=files)
                     response.raise_for_status()
                     body: dict[str, Any] = response.json()
                     return body
@@ -83,6 +98,17 @@ class MLClient:
         if len(scores) != len(documents):
             raise MLError("/rerank: число оценок не совпадает с числом документов")
         return scores
+
+    async def transcribe(self, audio: bytes, mime_type: str | None = None) -> Transcript:
+        content_type = (mime_type or "application/octet-stream").split(";")[0].strip()
+        body = await self._post("/transcribe", files={"file": ("audio", audio, content_type)})
+        return Transcript(
+            text=str(body.get("text", "")),
+            language=body.get("language"),
+            language_probability=body.get("language_probability"),
+            duration=body.get("duration"),
+            model=body.get("model"),
+        )
 
 
 @lru_cache

@@ -29,9 +29,19 @@ def embed_text(value: str) -> list[float]:
 
 
 class FakeML:
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(self, *, fail: bool = False, transcript: str = "голосовой текст") -> None:
         self.fail = fail
         self.reranked: list[list[str]] = []
+        self.transcript = transcript
+        self.transcribed: list[tuple[bytes, str | None]] = []
+
+    async def transcribe(self, audio: bytes, mime_type: str | None = None) -> Any:
+        from app.mlclient import MLError, Transcript
+
+        if self.fail:
+            raise MLError("down")
+        self.transcribed.append((audio, mime_type))
+        return Transcript(self.transcript, "kk", 0.9, 2.5, "fake-asr")
 
     async def embed(self, texts: list[str], kind: Any) -> list[list[float]]:
         if self.fail:

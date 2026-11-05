@@ -29,10 +29,18 @@ from app.core.config import get_settings
 from app.core.queue import Queue
 from app.db.session import tenant_session
 from app.llm import LLM, LLMError, ToolCall
+from app.mlclient import MLError, Transcript
 from app.models import Conversation, Message, Product, Unanswered
 from app.search.types import SearchML
 
 log = structlog.get_logger()
+
+
+VOICE_PLACEHOLDER = "[голосовое сообщение]"
+
+
+class AgentML(SearchML, Protocol):
+    async def transcribe(self, audio: bytes, mime_type: str | None = None) -> Transcript: ...
 
 
 class ChannelPort(Protocol):
@@ -46,7 +54,7 @@ class ChannelPort(Protocol):
 @dataclass
 class AgentDeps:
     llm: LLM | None
-    ml: SearchML
+    ml: AgentML
     queue: Queue
     channels: ChannelPort | None = None
     extra: dict[str, Any] = field(default_factory=dict)
@@ -104,8 +112,50 @@ class AgentNodes:
             "trace": [{"node": "ingest", "mode": mode}],
         }
 
+    async def recognize(self, state: ChatState, item: dict[str, Any]) -> dict[str, Any]:
+        channels, channel_id = self.deps.channels, state.get("channel_id")
+        if channels is None or not channel_id:
+            return {**item, "error": "канал недоступен"}
+        try:
+            audio = await channels.download(uuid.UUID(channel_id), Media.model_validate(item))
+            result = await self.deps.ml.transcribe(audio, item.get("mime_type"))
+        except (ChannelError, MLError) as exc:
+            log.warning("agent.transcribe_failed", channel_id=channel_id, error=str(exc))
+            return {**item, "error": str(exc)}
+        return {
+            **item,
+            "transcript": result.text.strip(),
+            "language": result.language,
+            "language_probability": result.language_probability,
+            "duration": result.duration,
+            "asr_model": result.model,
+        }
+
     async def transcribe(self, state: ChatState) -> dict[str, Any]:
-        return {"trace": step(state, "transcribe", skipped="шаг 8")}
+        items = [await self.recognize(state, item) for item in state.get("media", [])]
+        spoken = [i["transcript"] for i in items if i.get("transcript")]
+        last = next(m for m in reversed(state["messages"]) if isinstance(m, HumanMessage))
+        typed = str(last.content)
+        heard = "\n".join(part for part in (typed, *spoken) if part)
+        failed = not spoken
+        async with tenant_session(self.tenant(state)) as session:
+            await session.execute(
+                update(Message)
+                .where(Message.id == uuid.UUID(state["customer_message_id"]))
+                .values(content=heard or None, media={"items": items})
+            )
+        return {
+            "messages": [HumanMessage(id=last.id, content=heard or VOICE_PLACEHOLDER)],
+            "voice_failed": failed,
+            "trace": step(
+                state,
+                "transcribe",
+                recognized=len(spoken),
+                total=len(items),
+                languages=[i.get("language") for i in items],
+                failed=failed,
+            ),
+        }
 
     async def guard_in(self, state: ChatState) -> dict[str, Any]:
         text = last_human(state)
@@ -218,6 +268,11 @@ class AgentNodes:
             notes.append(
                 "Вопрос не о магазине. Вежливо откажи одной фразой и предложи помочь с выбором"
                 " товара или заказом."
+            )
+        if state.get("voice_failed"):
+            notes.append(
+                "Голосовое сообщение покупателя не удалось разобрать:"
+                " вежливо попроси написать текстом или записать ещё раз."
             )
         if state.get("human_mode"):
             notes.append("Диалог передан менеджеру: скажи, что менеджер скоро подключится.")
