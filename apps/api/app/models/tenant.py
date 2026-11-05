@@ -2,7 +2,6 @@ import uuid
 from typing import Any
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     CheckConstraint,
     ForeignKey,
@@ -33,7 +32,6 @@ class Tenant(IdMixin, TimestampMixin, Base):
     city: Mapped[str | None] = mapped_column(String(100))
     plan: Mapped[str] = mapped_column(String(32), server_default="trial")
     status: Mapped[str] = mapped_column(String(32), server_default="onboarding")
-    balance_kzt: Mapped[int] = mapped_column(BigInteger, server_default="0")
 
 
 class User(IdMixin, TimestampMixin, TenantMixin, Base):

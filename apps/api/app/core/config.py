@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -56,6 +57,8 @@ class Settings(BaseSettings):
 
     catalog_max_upload_bytes: int = 20 * 1024 * 1024
     catalog_max_rows: int = 50_000
+
+    pricing_kzt_per_usd: Decimal = Decimal(454)
 
     public_api_url: str = "http://localhost:8100"
     public_web_url: str = "http://localhost:3000"

@@ -12,12 +12,28 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, IdMixin, TenantMixin, TimestampMixin
+
+
+class PricingSettings(IdMixin, TimestampMixin, TenantMixin, Base):
+    __tablename__ = "pricing_settings"
+    __table_args__ = (
+        CheckConstraint("markup >= 3", name="markup"),
+        CheckConstraint("kzt_per_usd > 0", name="kzt_per_usd"),
+        UniqueConstraint("tenant_id"),
+    )
+
+    markup: Mapped[Decimal] = mapped_column(Numeric(6, 3), server_default="3")
+    kzt_per_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    model_prices: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=sql_text("'{}'::jsonb")
+    )
 
 
 class Payment(IdMixin, TimestampMixin, TenantMixin, Base):

@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -25,9 +26,9 @@ class UnknownModelError(KeyError):
     pass
 
 
-def cost_usd(model: str, usage: Usage) -> Decimal:
+def cost_usd(model: str, usage: Usage, prices: Mapping[str, ModelPrice] = MODEL_PRICES) -> Decimal:
     try:
-        price = MODEL_PRICES[model]
+        price = prices[model]
     except KeyError as exc:
         raise UnknownModelError(model) from exc
     cached = min(usage.cached_tokens, usage.input_tokens)
