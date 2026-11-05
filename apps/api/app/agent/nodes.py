@@ -1,11 +1,13 @@
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any, Protocol
 
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.graph import MAX_RETRIES, MAX_TOOL_HOPS
 from app.agent.guard import check_reply
@@ -43,7 +45,10 @@ PAUSE_REPLY = {
     "ru": "Спасибо за сообщение! Менеджер скоро вам ответит.",
     "kk": "Хабарламаңызға рақмет! Менеджер жақын арада жауап береді.",
 }
-PAUSE_REASONS = {"no_balance": "баланс магазина закончился"}
+PAUSE_REASONS = {
+    "no_balance": "баланс магазина закончился",
+    "rate_limit": "покупатель превысил лимит ответов бота в час",
+}
 
 
 class AgentML(SearchML, Protocol):
@@ -176,12 +181,30 @@ class AgentNodes:
             ),
         }
 
+    async def bot_replies_last_hour(self, session: AsyncSession, state: ChatState) -> int:
+        customer = (
+            select(Conversation.customer_id)
+            .where(Conversation.id == uuid.UUID(state["conversation_id"]))
+            .scalar_subquery()
+        )
+        count = await session.scalar(
+            select(func.count(Message.id))
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Conversation.customer_id == customer,
+                Message.role == "bot",
+                Message.created_at >= func.now() - timedelta(hours=1),
+            )
+        )
+        return int(count or 0)
+
     async def pause_reason(self, state: ChatState) -> str | None:
         async with tenant_session(self.tenant(state)) as session:
             balance = await get_balance(session)
             if balance <= 0 or balance < await estimated_reply_price(session):
                 return "no_balance"
-        return None
+            replies = await self.bot_replies_last_hour(session, state)
+        return "rate_limit" if replies >= get_settings().bot_replies_per_hour else None
 
     async def gate(self, state: ChatState) -> dict[str, Any]:
         reason = await self.pause_reason(state)
