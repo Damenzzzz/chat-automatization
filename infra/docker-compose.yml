@@ -83,7 +83,7 @@ services:
     build: ../apps/api
     <<: *app-env
     environment: *python-env
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--timeout-graceful-shutdown", "5"]
     ports:
       - "${API_PORT:-8100}:8000"
     volumes:
