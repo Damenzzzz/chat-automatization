@@ -138,7 +138,10 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 
 Смысл оформления и токены — [docs/design-tokens.md](docs/design-tokens.md). Решения — [ADR 0007](docs/adr/0007-cabinet-api-access.md).
 
-- Страницы: `/login`, `/signup`, `/setup?step=1..5`, `/overview`, `/dialogs?id=&filter=`, `/leads`, `/products`, `/bot`, `/channels`, `/balance`, `/settings`. `page.tsx` — серверный (metadata), `view.tsx` — клиентский.
+- Страницы: `/` (лендинг с живым чатом демо-бота, `components/landing`), `/login`, `/signup`, `/setup?step=1..5`, `/overview`, `/dialogs?id=&filter=`, `/leads`, `/products`, `/bot`, `/channels`, `/balance`, `/settings`. `page.tsx` — серверный (metadata), `view.tsx` — клиентский.
+- Оформление: небо `sky` — действие и бот, солнце `sun` — «нужен человек», `ink` — текст и меню; разделы — белые `panel` на `canvas`; заголовки Geologica, текст Golos Text. Белый текст на `sky` не ставить.
+- `useSession()` отдаёт `me`/`shop` только после гидратации, иначе серверная и клиентская разметка расходятся.
+- Prettier сортирует классы по `globals.css`: новую утилиту коммитить вместе с файлами, которые её используют, или раньше них.
 - API только через прокси Next: `/api/*` и `/auth/*` (`next.config.ts`, `API_INTERNAL_URL`; при `output: standalone` адрес зашивается при сборке). `/auth` отдельно: refresh-cookie живёт на этом пути.
 - Клиент: `api` из `lib/api/client.ts` (openapi-fetch, при 401 один раз обновляет сессию) и `unwrap` + SWR. Ключ SWR — строка с путём: `InboxStream` по SSE сбрасывает всё, что начинается с `/conversations` и `/leads`.
 - Новый код ошибки API — текст в `lib/api/errors.ts`. Схема поменялась — `make api-types` и коммит `schema.d.ts`.
@@ -146,6 +149,14 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Ответ менеджера кладётся и в чекпоинт бота (`Agent.remember_manager_reply`), иначе после «Вернуть боту» бот его не знает.
 - Примитивы — `components/ui`, свои, на нативных `button`, `label`, `select`, `dialog`. Новый шрифт проверять по таблице символов: `ә ғ қ ң ө ұ ү һ і` и ₸.
 - Новые страницы в запущенном `next dev` могут отдавать 404 до перезапуска. Новая зависимость в контейнере — `make up` (пересоздаёт анонимный том `node_modules`).
+
+## Демо-режим
+
+Решения — [ADR 0008](docs/adr/0008-demo-mode.md). `DEMO_ENABLED=true` (так в `.env.example`).
+
+- `POST /demo/login` — вход владельцем «Цветы Пион»; `ensure_demo_shop` досеивает каталог, историю (`app/demo/activity.py`, покупатели `demo:*`, пересоздаётся старше 2 дней) и баланс. `make seed` делает то же.
+- `POST /demo/chat {message, session_id}` — публичный чат лендинга, граф песочницы, 12 в минуту и 60 в час на IP, в ответе `cards` с ценой из БД.
+- `POST /auth/request-code` при демо и `ENV != prod` возвращает `demo_code`, форма входа показывает его и подставляет. `GET /me` → `demo`.
 
 ## Модели
 
