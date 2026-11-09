@@ -39,13 +39,46 @@ function Change({ value }: { value: number | null | undefined }) {
   );
 }
 
-function Figure({ label, value, note }: { label: string; value: string; note: React.ReactNode }) {
+function Figure({
+  label,
+  value,
+  note,
+  accent,
+}: {
+  label: string;
+  value: string;
+  note: React.ReactNode;
+  accent?: boolean;
+}) {
   return (
-    <div className="min-w-0 py-1 lg:px-6 lg:first:pl-0 lg:last:pr-0">
-      <dt className="text-sm text-steel">{label}</dt>
-      <dd>
-        <span className="display block text-2xl tnum">{value}</span>
-        <span className="mt-0.5 block text-xs text-steel">{note}</span>
+    <div
+      className={cn(
+        "relative min-w-0 overflow-hidden rounded-[20px] p-5 transition-transform hover:-translate-y-0.5",
+        accent
+          ? "on-ink bg-night text-paper shadow-[0_20px_40px_-20px_rgb(0_178_207/0.6)]"
+          : "panel",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute -top-16 -right-16 size-40 rounded-full blur-2xl",
+          accent ? "bg-sky/50" : "bg-sky/15",
+        )}
+      />
+      <dt className={cn("relative text-sm", accent ? "text-paper/70" : "text-steel")}>{label}</dt>
+      <dd className="relative">
+        <span
+          className={cn(
+            "display mt-1 block text-[2.25rem] leading-tight tnum",
+            accent && "text-sky-gradient",
+          )}
+        >
+          {value}
+        </span>
+        <span className={cn("mt-1 block text-xs", accent ? "text-paper/60" : "text-steel")}>
+          {note}
+        </span>
       </dd>
     </div>
   );
@@ -59,13 +92,14 @@ function Metrics({ data }: { data: Schemas["OverviewOut"] }) {
       ? null
       : current.avg_response_ms / 1000;
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-5 pb-6 lg:grid-cols-4 lg:divide-x lg:divide-line">
+    <dl className="grid grid-cols-2 gap-3 pb-6 lg:grid-cols-4 lg:gap-4">
       <Figure
         label="Диалоги"
         value={count(current.dialogs)}
         note={<Change value={change.dialogs} />}
       />
       <Figure
+        accent
         label="Бот справился сам"
         value={share === null || share === undefined ? "нет данных" : `${Math.round(share * 100)}%`}
         note={`${count(current.bot_resolved)} ${plural(current.bot_resolved, "диалог", "диалога", "диалогов")} без менеджера`}

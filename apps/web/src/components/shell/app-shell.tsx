@@ -76,8 +76,8 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
                   className={cn(
                     "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors sm:min-h-10",
                     active
-                      ? "bg-sky font-semibold text-ink"
-                      : "text-paper/80 hover:bg-ink-soft hover:text-paper",
+                      ? "bg-gradient-to-r from-glow to-sky font-semibold text-ink shadow-[0_0_24px_-4px_rgb(61_224_245/0.6)]"
+                      : "text-paper/70 hover:bg-white/[0.07] hover:text-paper",
                   )}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden />
@@ -101,7 +101,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
         <button
           type="button"
           onClick={() => void logout()}
-          className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm text-paper/70 hover:bg-ink-soft hover:text-paper sm:min-h-9"
+          className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm text-paper/70 hover:bg-white/[0.07] hover:text-paper sm:min-h-9"
         >
           <LogOut className="size-4" aria-hidden />
           Выйти
@@ -121,7 +121,7 @@ function MobileMenu() {
   }, [pathname]);
 
   return (
-    <header className="on-ink sticky top-0 z-20 flex h-14 items-center justify-between bg-ink px-4 text-paper lg:hidden">
+    <header className="on-ink sticky top-0 z-20 flex h-14 items-center justify-between bg-night/90 px-4 text-paper backdrop-blur-xl lg:hidden">
       <Link href="/overview" aria-label="Satushy, на обзор">
         <Wordmark tone="paper" />
       </Link>
@@ -142,7 +142,7 @@ function MobileMenu() {
       <dialog
         ref={dialog}
         aria-label="Меню"
-        className="on-ink m-0 h-dvh max-h-none w-[min(20rem,85vw)] max-w-none bg-ink text-paper"
+        className="on-ink m-0 h-dvh max-h-none w-[min(20rem,85vw)] max-w-none bg-night text-paper"
         onClick={(event) => {
           if (event.target === dialog.current) dialog.current?.close();
         }}
@@ -237,8 +237,16 @@ function Frame({ children }: { children: ReactNode }) {
       >
         Перейти к содержимому
       </a>
-      <aside className="on-ink sticky top-0 hidden h-svh flex-col overflow-hidden bg-ink lg:flex">
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 ornament [mask-image:linear-gradient(to_top,black,transparent)] opacity-60" />
+      <aside className="on-ink sticky top-0 hidden h-svh flex-col overflow-hidden border-r border-white/5 bg-night lg:flex">
+        <div
+          aria-hidden
+          className="aurora top-[-8rem] left-[-6rem] h-72 w-72 animate-aurora-a bg-sky/35"
+        />
+        <div
+          aria-hidden
+          className="aurora right-[-8rem] bottom-[-6rem] h-64 w-64 animate-aurora-b bg-sun/15"
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 ornament [mask-image:linear-gradient(to_top,black,transparent)] opacity-40" />
         <div className="relative px-6 pt-6 pb-6">
           <Link href="/overview" aria-label="Satushy, на обзор">
             <Wordmark tone="paper" />
