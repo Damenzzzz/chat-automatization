@@ -45,18 +45,20 @@ function sessionId(): string {
 
 function Card({ card }: { card: Schemas["DemoCard"] }) {
   return (
-    <li className="flex min-w-0 items-center gap-3 rounded-lg border border-line bg-paper p-2 pr-3">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-sun-soft text-ink">
+    <li className="flex min-w-0 animate-bubble items-center gap-3 rounded-lg border border-white/10 bg-white/[0.06] p-2 pr-3 text-paper backdrop-blur">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-sun to-[#ff9f43] text-ink">
         <Flower2 className="size-5" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{card.name}</span>
-        <span className="block text-xs text-steel">
+        <span className="block text-xs text-paper/55">
           {card.stock ? `в наличии ${card.stock} шт.` : "под заказ"}
         </span>
       </span>
       {card.price !== null && (
-        <span className="shrink-0 text-sm font-semibold tnum">{money(card.price)}</span>
+        <span className="shrink-0 text-sky-gradient text-sm font-semibold tnum">
+          {money(card.price)}
+        </span>
       )}
     </li>
   );
@@ -122,124 +124,129 @@ export function LiveChat({ className }: { className?: string }) {
   const asked = bubbles.some((bubble) => bubble.from === "customer");
 
   return (
-    <section
-      aria-label="Чат с ботом демо-магазина"
-      className={cn(
-        "flex h-[34rem] max-h-[78svh] flex-col overflow-hidden rounded-xl bg-paper shadow-[0_30px_60px_-20px_rgb(19_32_59/0.45)]",
-        className,
-      )}
-    >
-      <header className="flex items-center gap-3 bg-ink px-4 py-3 text-paper">
-        <span className="flex size-10 items-center justify-center rounded-full bg-sun text-ink">
-          <Flower2 className="size-5" aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-semibold">Цветы Пион</span>
-          <span className="block text-xs text-paper/70">
-            {busy ? "печатает…" : "отвечает бот Satushy"}
-          </span>
-        </span>
-        <span className="rounded-full bg-paper/10 px-2.5 py-1 text-xs">демо</span>
-      </header>
-
-      <ol
-        ref={log}
-        aria-live="polite"
-        className="flex flex-1 flex-col gap-2.5 overflow-y-auto bg-[#e9eef3] bg-[url(/ornament-ink.svg)] bg-size-[120px_120px] px-3 py-4"
+    <div className={cn("glow-border rounded-xl", className)}>
+      <section
+        aria-label="Чат с ботом демо-магазина"
+        className="flex h-[34rem] max-h-[78svh] flex-col rounded-xl bg-night-2 shadow-[0_40px_120px_-30px_rgb(61_224_245/0.45)]"
       >
-        {bubbles.map((bubble) =>
-          bubble.from === "note" ? (
-            <li
-              key={bubble.id}
-              className="animate-bubble self-center px-4 text-center text-xs text-steel"
-            >
-              {bubble.text}
-            </li>
-          ) : (
-            <li
-              key={bubble.id}
-              className={cn(
-                "flex max-w-[88%] animate-bubble flex-col gap-2",
-                bubble.from === "customer" ? "self-end" : "self-start",
-              )}
-            >
-              <p
+        <header className="flex items-center gap-3 rounded-t-xl border-b border-white/10 bg-white/[0.04] px-4 py-3 text-paper">
+          <span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-br from-sun to-[#ff9f43] text-ink">
+            <Flower2 className="size-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Цветы Пион</span>
+            <span className="flex items-center gap-1.5 text-xs text-paper/60">
+              <span className="size-1.5 rounded-full bg-teal shadow-[0_0_8px_var(--teal)]" />
+              {busy ? "печатает…" : "отвечает бот Satushy"}
+            </span>
+          </span>
+          <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-paper/80">
+            демо
+          </span>
+        </header>
+
+        <ol
+          ref={log}
+          aria-live="polite"
+          className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-3 py-4"
+        >
+          {bubbles.map((bubble) =>
+            bubble.from === "note" ? (
+              <li
+                key={bubble.id}
+                className="animate-bubble self-center px-4 text-center text-xs text-paper/60"
+              >
+                {bubble.text}
+              </li>
+            ) : (
+              <li
+                key={bubble.id}
                 className={cn(
-                  "rounded-xl px-3.5 py-2 text-[0.9375rem] leading-snug whitespace-pre-line",
-                  bubble.from === "customer"
-                    ? "rounded-br-sm bg-sky text-ink"
-                    : "rounded-bl-sm bg-paper text-ink",
+                  "flex max-w-[88%] animate-bubble flex-col gap-2",
+                  bubble.from === "customer" ? "self-end" : "self-start",
                 )}
               >
-                <span className="sr-only">{bubble.from === "customer" ? "Вы: " : "Бот: "}</span>
-                {bubble.text}
-              </p>
-              {bubble.from === "bot" && bubble.cards.length > 0 && (
-                <ul className="flex flex-col gap-1.5" aria-label="Товары из каталога">
-                  {bubble.cards.map((card) => (
-                    <Card key={card.id} card={card} />
-                  ))}
-                </ul>
+                <p
+                  className={cn(
+                    "rounded-xl px-3.5 py-2 text-[0.9375rem] leading-snug whitespace-pre-line",
+                    bubble.from === "customer"
+                      ? "rounded-br-sm bg-gradient-to-br from-glow to-sky text-ink"
+                      : "rounded-bl-sm border border-white/10 bg-white/[0.07] text-paper",
+                  )}
+                >
+                  <span className="sr-only">{bubble.from === "customer" ? "Вы: " : "Бот: "}</span>
+                  {bubble.text}
+                </p>
+                {bubble.from === "bot" && bubble.cards.length > 0 && (
+                  <ul className="flex flex-col gap-1.5" aria-label="Товары из каталога">
+                    {bubble.cards.map((card) => (
+                      <Card key={card.id} card={card} />
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ),
+          )}
+          {busy && (
+            <li className="flex flex-col gap-1 self-start" role="status">
+              <span className="flex gap-1 rounded-xl rounded-bl-sm border border-white/10 bg-white/[0.07] px-3.5 py-3">
+                {[0, 1, 2].map((dot) => (
+                  <span
+                    key={dot}
+                    className="size-1.5 animate-typing rounded-full bg-glow"
+                    style={{ animationDelay: `${dot * 150}ms` }}
+                  />
+                ))}
+                <span className="sr-only">Бот печатает</span>
+              </span>
+              {slow && (
+                <span className="px-1 text-xs text-paper/55">ищет в каталоге и сверяет цены</span>
               )}
             </li>
-          ),
-        )}
-        {busy && (
-          <li className="flex flex-col gap-1 self-start" role="status">
-            <span className="flex gap-1 rounded-xl rounded-bl-sm bg-paper px-3.5 py-3">
-              {[0, 1, 2].map((dot) => (
-                <span
-                  key={dot}
-                  className="size-1.5 animate-typing rounded-full bg-steel"
-                  style={{ animationDelay: `${dot * 150}ms` }}
-                />
-              ))}
-              <span className="sr-only">Бот печатает</span>
-            </span>
-            {slow && (
-              <span className="px-1 text-xs text-steel">ищет в каталоге и сверяет цены</span>
-            )}
-          </li>
-        )}
-      </ol>
+          )}
+        </ol>
 
-      {!asked && (
-        <div className="flex gap-2 overflow-x-auto bg-[#e9eef3] px-3 pb-3">
-          {SUGGESTIONS.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              onClick={() => void send(suggestion)}
-              className="min-h-9 shrink-0 rounded-full border border-sky-deep/40 bg-paper px-3 text-sm text-ink hover:border-sky-deep"
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-      )}
+        {!asked && (
+          <div className="flex gap-2 overflow-x-auto px-3 pb-3">
+            {SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => void send(suggestion)}
+                className="min-h-9 shrink-0 rounded-full border border-glow/30 bg-glow/5 px-3 text-sm text-paper transition-colors hover:border-glow hover:bg-glow/15"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
 
-      <form onSubmit={submit} className="flex items-center gap-2 border-t border-line p-2.5">
-        <label htmlFor="demo-chat-input" className="sr-only">
-          Сообщение боту
-        </label>
-        <input
-          id="demo-chat-input"
-          value={text}
-          maxLength={500}
-          autoComplete="off"
-          onChange={(event) => setText(event.target.value)}
-          placeholder="Напишите как покупатель"
-          className="min-h-11 min-w-0 flex-1 rounded-full bg-mist px-4 text-base"
-        />
-        <button
-          type="submit"
-          disabled={busy || !text.trim()}
-          aria-label="Отправить"
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-sky text-ink disabled:bg-haze disabled:text-steel"
+        <form
+          onSubmit={submit}
+          className="flex items-center gap-2 rounded-b-xl border-t border-white/10 p-2.5"
         >
-          <ArrowUp className="size-5" aria-hidden />
-        </button>
-      </form>
-    </section>
+          <label htmlFor="demo-chat-input" className="sr-only">
+            Сообщение боту
+          </label>
+          <input
+            id="demo-chat-input"
+            value={text}
+            maxLength={500}
+            autoComplete="off"
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Напишите как покупатель"
+            className="min-h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 text-base text-paper placeholder:text-paper/45 focus-visible:border-glow"
+          />
+          <button
+            type="submit"
+            disabled={busy || !text.trim()}
+            aria-label="Отправить"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-glow to-sky text-ink shadow-[0_0_24px_rgb(61_224_245/0.5)] transition-transform hover:scale-105 disabled:from-white/10 disabled:to-white/10 disabled:text-paper/40 disabled:shadow-none"
+          >
+            <ArrowUp className="size-5" aria-hidden />
+          </button>
+        </form>
+      </section>
+    </div>
   );
 }

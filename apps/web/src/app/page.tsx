@@ -1,18 +1,11 @@
-import {
-  BookOpenCheck,
-  ClipboardList,
-  Globe,
-  Headset,
-  Languages,
-  MessageCircle,
-  Mic,
-  Send,
-  ShieldCheck,
-} from "lucide-react";
+import { Globe, MessageCircle, Send, type LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { DemoButton } from "@/components/auth/demo-button";
+import { Bento } from "@/components/landing/bento";
+import { ConnectCode } from "@/components/landing/connect-code";
+import { Reveal, RotatingWords, Starfield, StickyNav, Tilt } from "@/components/landing/effects";
 import { LiveChat } from "@/components/landing/live-chat";
 import { Wordmark } from "@/components/shell/wordmark";
 import { buttonVariants } from "@/components/ui/button";
@@ -22,11 +15,40 @@ export const metadata: Metadata = {
   title: { absolute: "Satushy — бот-продавец для магазинов Казахстана" },
 };
 
+const QUESTIONS_A = [
+  "Ақ пион бар ма?",
+  "Сколько стоит доставка по Алматы?",
+  "51 раушан қанша тұрады?",
+  "Есть розовые пионы до 35 000?",
+  "Kaspi Red арқылы бола ма?",
+  "Можно забрать самовывозом?",
+  "Ертеңге жеткізесіздер ме?",
+  "Что подарить маме до 25 тысяч?",
+];
+
+const QUESTIONS_B = [
+  "Салем, керек букет невесты",
+  "Есть в наличии размер 42?",
+  "Масло 5W-30 на Camry бар ма?",
+  "Сегодня до 20:00 успеете?",
+  "Қай уақытқа дейін жұмыс істейсіздер?",
+  "Можно оплатить при получении?",
+  "Гортензия бар ма?",
+  "Скиньте фото, пожалуйста",
+];
+
+const CHANNELS: [LucideIcon, string][] = [
+  [MessageCircle, "WhatsApp"],
+  [Send, "Telegram"],
+  [MessageCircle, "Instagram"],
+  [Globe, "на сайте"],
+];
+
 const NIGHT = [
   {
     time: "23:41",
     channel: "Instagram",
-    text: "Покупательница спрашивает белые пионы на завтра. Бот находит букет в каталоге, называет цену и остаток, присылает карточку.",
+    text: "Покупательница спрашивает белые пионы на завтра. Бот находит букет, называет цену и остаток, присылает карточку.",
   },
   {
     time: "00:15",
@@ -36,77 +58,35 @@ const NIGHT = [
   {
     time: "01:30",
     channel: "Telegram",
-    text: "Вопрос про доставку в Каскелен. В базе знаний ответа нет, поэтому бот не выдумывает, а обещает уточнить и записывает вопрос.",
+    text: "Вопрос про доставку в Каскелен. Ответа в базе нет — бот не выдумывает, обещает уточнить и записывает вопрос.",
   },
   {
     time: "07:00",
     channel: "Кабинет",
-    text: "Вы открываете телефон: две заявки с адресом и временем, один покупатель ждёт менеджера, один вопрос, на который стоит ответить один раз.",
+    text: "Утром у вас две заявки с адресом и временем, один покупатель ждёт менеджера и один новый вопрос для базы знаний.",
   },
-];
-
-const SKILLS = [
-  {
-    icon: Languages,
-    title: "Говорит как ваш покупатель",
-    text: "Казахский, русский и их смесь в одном сообщении. Отвечает на языке, на котором спросили.",
-  },
-  {
-    icon: Mic,
-    title: "Слушает голосовые",
-    text: "Расшифровывает голосовые сообщения, в том числе на казахском, и отвечает текстом.",
-  },
-  {
-    icon: ClipboardList,
-    title: "Собирает заявку",
-    text: "Товар, адрес, время и телефон — заявка сразу появляется в кабинете и приходит менеджеру в Telegram.",
-  },
-  {
-    icon: Headset,
-    title: "Зовёт человека вовремя",
-    text: "Индивидуальный заказ, жалоба или просьба позвать менеджера — диалог переходит к вам, бот молчит.",
-  },
-  {
-    icon: BookOpenCheck,
-    title: "Учится на пропущенных вопросах",
-    text: "Всё, на что бот не ответил, собирается в одном списке. Ответили один раз — бот запомнил.",
-  },
-];
-
-const CHANNELS = [
-  { icon: MessageCircle, name: "WhatsApp", note: "через WhatsApp Business" },
-  { icon: Send, name: "Telegram", note: "ваш бот из @BotFather" },
-  { icon: Globe, name: "Сайт", note: "окно чата одной строкой кода" },
-  { icon: MessageCircle, name: "Instagram", note: "после проверки Meta" },
 ];
 
 const STEPS = [
-  {
-    title: "Загрузите каталог",
-    text: "Excel, CSV или ссылка на Google Таблицу. Колонки с ценой, остатком и названием бот найдёт сам.",
-  },
-  {
-    title: "Расскажите о магазине",
-    text: "Доставка, оплата, часы работы и тон общения: на «вы», тепло, коротко.",
-  },
-  {
-    title: "Проверьте в песочнице",
-    text: "Поговорите с ботом сами или запустите автотест: он задаст 20 вопросов по вашему каталогу.",
-  },
-  {
-    title: "Подключите каналы",
-    text: "Telegram, WhatsApp или окно чата на сайте. Покупателям ничего устанавливать не нужно.",
-  },
-  {
-    title: "Пополните баланс",
-    text: "Счёт на оплату для ТОО и ИП прямо из кабинета. Бот начинает отвечать.",
-  },
+  ["Загрузите каталог", "Excel, CSV или Google Таблица — колонки бот найдёт сам."],
+  ["Расскажите о магазине", "Доставка, оплата, часы работы и тон общения."],
+  ["Проверьте в песочнице", "Автотест задаст 20 вопросов по вашему каталогу."],
+  ["Подключите каналы", "Telegram, WhatsApp или окно чата на сайте."],
+  ["Пополните баланс", "Счёт для ТОО и ИП прямо из кабинета."],
+];
+
+const PRICE = [
+  ["Ответ бота", "несколько тенге, цена видна у каждого сообщения"],
+  ["Песочница и автотест", "бесплатно"],
+  ["Ответы менеджера", "бесплатно"],
+  ["Пополнение", "по счёту для ТОО и ИП"],
+  ["Предупреждения", "когда остаётся 20% и 5% баланса"],
 ];
 
 const FAQ = [
   {
     q: "Бот может ошибиться в цене?",
-    a: "Цены и остатки бот берёт только из вашего каталога. Каждую сумму в ответе Satushy сверяет с каталогом перед отправкой. Если сумма не совпала, ответ не уйдёт: бот переформулирует его или передаст диалог менеджеру.",
+    a: "Цены и остатки бот берёт только из вашего каталога. Каждую сумму в ответе Satushy сверяет с каталогом перед отправкой. Не совпала — ответ не уйдёт: бот переформулирует его или передаст диалог менеджеру.",
   },
   {
     q: "Что будет, если бот не знает ответа?",
@@ -118,11 +98,11 @@ const FAQ = [
   },
   {
     q: "Можно вмешаться в разговор?",
-    a: "Да. В разделе «Диалоги» видно все переписки в реальном времени. Кнопка «Перехватить» останавливает бота, вы пишете сами, затем возвращаете диалог боту.",
+    a: "Да. В «Диалогах» видно все переписки в реальном времени. Кнопка «Перехватить» останавливает бота, вы пишете сами и затем возвращаете диалог боту.",
   },
   {
     q: "Как устроена оплата?",
-    a: "Абонентской платы нет. Вы пополняете баланс, и с него списывается каждый ответ бота — обычно несколько тенге. Цена каждого ответа видна в диалоге. Песочница и шаблонные ответы бесплатны.",
+    a: "Абонентской платы нет. Вы пополняете баланс, с него списывается каждый ответ бота — обычно несколько тенге. Песочница и шаблонные ответы бесплатны.",
   },
   {
     q: "Кто видит переписки моих покупателей?",
@@ -132,77 +112,169 @@ const FAQ = [
 
 function Nav() {
   return (
-    <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-8">
-      <Link href="/" aria-label="Satushy, на главную">
-        <Wordmark />
-      </Link>
-      <nav aria-label="Разделы страницы" className="hidden items-center gap-7 text-sm md:flex">
-        <a href="#night" className="hover:underline hover:underline-offset-4">
-          Как работает
-        </a>
-        <a href="#skills" className="hover:underline hover:underline-offset-4">
-          Возможности
-        </a>
-        <a href="#start" className="hover:underline hover:underline-offset-4">
-          Подключение
-        </a>
-        <a href="#price" className="hover:underline hover:underline-offset-4">
-          Оплата
-        </a>
-      </nav>
-      <div className="flex items-center gap-2">
-        <Link
-          href="/login"
-          className="flex min-h-11 items-center rounded-md px-3 text-sm font-semibold hover:bg-ink/10"
+    <StickyNav>
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-8">
+        <Link href="/" aria-label="Satushy, на главную">
+          <Wordmark tone="paper" />
+        </Link>
+        <nav
+          aria-label="Разделы страницы"
+          className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1 text-sm text-paper/70 backdrop-blur md:flex"
         >
-          Войти
-        </Link>
-        <Link href="/signup" className={cn(buttonVariants({ variant: "dark" }), "max-sm:hidden")}>
-          Подключить магазин
-        </Link>
-      </div>
-    </header>
+          {[
+            ["#night", "Как работает"],
+            ["#skills", "Возможности"],
+            ["#start", "Подключение"],
+            ["#price", "Оплата"],
+          ].map(([href, label]) => (
+            <a
+              key={href}
+              href={href}
+              className="rounded-full px-3.5 py-1.5 transition-colors hover:bg-white/10 hover:text-paper"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/login"
+            className="flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-paper/80 hover:text-paper"
+          >
+            Войти
+          </Link>
+          <Link href="/signup" className={cn(buttonVariants({ variant: "glow" }), "max-sm:hidden")}>
+            Подключить магазин
+          </Link>
+        </div>
+      </header>
+    </StickyNav>
+  );
+}
+
+function Sky() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 grid-lines" />
+      <div className="aurora top-[-20%] left-[-10%] h-[38rem] w-[38rem] animate-aurora-a bg-sky/40" />
+      <div className="aurora top-[5%] right-[-15%] h-[34rem] w-[40rem] animate-aurora-b bg-teal/25" />
+      <div className="aurora bottom-[-35%] left-[30%] h-[30rem] w-[44rem] animate-aurora-a bg-[#3b5bff]/25 [animation-delay:-8s]" />
+      <Starfield className="absolute inset-0 h-full w-full" />
+      <div className="absolute bottom-[-26rem] left-1/2 h-[40rem] w-[70rem] animate-[sunrise_9s_ease-in-out_infinite] rounded-full bg-[radial-gradient(closest-side,rgb(255_198_41/0.5),rgb(255_159_67/0.18)_45%,transparent_70%)] blur-2xl" />
+      <div className="grain absolute inset-0" />
+    </div>
   );
 }
 
 function Hero() {
   return (
-    <div className="relative overflow-hidden rounded-b-2xl bg-sky">
-      <div className="pointer-events-none absolute inset-0 ornament opacity-55" />
-      <Nav />
-      <div className="relative mx-auto grid w-full max-w-6xl items-center gap-10 px-4 pt-6 pb-14 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:pt-10 lg:pb-20">
+    <div className="relative overflow-hidden">
+      <Sky />
+      <div className="relative mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-12 px-4 pt-32 pb-20 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:pt-40 lg:pb-28">
         <div className="max-w-xl">
-          <h1 className="text-[2.75rem] leading-[0.95] sm:text-[4.25rem] lg:text-[5rem]">
-            Сатушы, который не&nbsp;спит
+          <a
+            href="#night"
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] py-1 pr-3.5 pl-1 text-sm text-paper/80 backdrop-blur transition-colors hover:border-glow/50"
+          >
+            <span className="rounded-full bg-gradient-to-r from-glow to-sky px-2 py-0.5 text-xs font-semibold text-ink">
+              ru + kk
+            </span>
+            Отвечает на языке покупателя
+          </a>
+          <h1 className="mt-6 text-[2.75rem] leading-[1] text-paper sm:text-[4.25rem] lg:text-[4.75rem]">
+            <span className="text-shine">Сатушы, который</span>
+            <br />
+            <RotatingWords
+              words={["не спит", "знает весь каталог", "говорит по-казахски", "не врёт о ценах"]}
+              className="text-sky-gradient pb-2"
+              boxClassName="block min-h-[2em]"
+            />
           </h1>
-          <p className="mt-6 max-w-lg text-lg text-ink/85">
-            Бот знает весь каталог вашего магазина и отвечает покупателям в WhatsApp, Instagram,
-            Telegram и на сайте — по-казахски, по-русски и вперемешку. Цены и остатки берёт только
-            из вашей таблицы.
+          <p className="mt-6 max-w-lg text-lg text-paper/65">
+            AI-продавец знает каждый товар вашего магазина и отвечает покупателям в WhatsApp,
+            Instagram, Telegram и на сайте. Цены и остатки — только из вашей таблицы.
           </p>
-          <div className="mt-8 flex flex-wrap items-start gap-3">
-            <DemoButton variant="dark" className="min-h-12 px-6 text-base" hideWhenOff={false}>
+          <div className="mt-9 flex flex-wrap items-start gap-3">
+            <DemoButton variant="glow" className="min-h-12 px-6 text-base" hideWhenOff={false}>
               Открыть демо-кабинет
             </DemoButton>
             <Link
               href="/signup"
-              className={cn(
-                buttonVariants({ variant: "secondary" }),
-                "min-h-12 border-ink/20 bg-paper/70 px-6 text-base hover:bg-paper",
-              )}
+              className={cn(buttonVariants({ variant: "glass" }), "min-h-12 px-6 text-base")}
             >
               Подключить свой магазин
             </Link>
           </div>
-          <p className="mt-6 max-w-md text-sm text-ink/75">
-            <span className="lg:hidden">Ниже</span>
-            <span className="max-lg:hidden">Справа</span> — настоящий бот демо-магазина «Цветы
-            Пион». Спросите его о букете, как спросил бы покупатель.
-          </p>
+          <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-paper/45">
+            <span>Работает в</span>
+            {CHANNELS.map(([Icon, name]) => (
+              <span key={name} className="flex items-center gap-1.5 text-paper/70">
+                <Icon className="size-4" aria-hidden />
+                {name}
+              </span>
+            ))}
+          </div>
         </div>
-        <LiveChat className="w-full lg:max-w-md lg:justify-self-end" />
+        <div className="relative">
+          <p className="mb-4 flex items-center justify-center gap-2 text-sm text-paper/60 lg:justify-end">
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal opacity-75" />
+              <span className="relative inline-flex size-2 rounded-full bg-teal" />
+            </span>
+            Это настоящий бот демо-магазина — спросите его
+          </p>
+          <Tilt className="lg:ml-auto lg:max-w-md">
+            <LiveChat className="w-full" />
+          </Tilt>
+        </div>
       </div>
     </div>
+  );
+}
+
+function Ticker({ items, reverse }: { items: string[]; reverse?: boolean }) {
+  return (
+    <div className="flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_10%,#000_90%,transparent)]">
+      <ul
+        className={cn(
+          "flex shrink-0 animate-marquee gap-3 pr-3",
+          reverse && "[animation-direction:reverse]",
+        )}
+      >
+        {[...items, ...items].map((item, index) => (
+          <li
+            key={index}
+            aria-hidden={index >= items.length || undefined}
+            className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm whitespace-nowrap text-paper/75"
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Questions() {
+  return (
+    <section aria-label="Вопросы покупателей" className="border-y border-white/[0.06] py-10">
+      <p className="mb-6 px-4 text-center text-sm text-paper/45">
+        Так пишут покупатели. Бот понимает всё — с ошибками, сокращениями и на двух языках.
+      </p>
+      <div className="flex flex-col gap-3">
+        <Ticker items={QUESTIONS_A} />
+        <Ticker items={QUESTIONS_B} reverse />
+      </div>
+    </section>
+  );
+}
+
+function SectionTitle({ title, text }: { title: string; text?: string }) {
+  return (
+    <Reveal className="max-w-2xl">
+      <h2 className="text-[2rem] leading-tight text-paper sm:text-[3rem]">{title}</h2>
+      {text && <p className="mt-4 text-lg text-paper/60">{text}</p>}
+    </Reveal>
   );
 }
 
@@ -210,26 +282,33 @@ function Night() {
   return (
     <section
       id="night"
-      className="mx-auto w-full max-w-6xl scroll-mt-6 px-4 py-20 sm:px-8 lg:py-28"
+      className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-24 sm:px-8 lg:py-32"
     >
-      <div className="grid gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <div className="lg:sticky lg:top-10 lg:self-start">
-          <h2 className="text-[2rem] leading-tight sm:text-[2.75rem]">Пока магазин закрыт</h2>
-          <p className="mt-4 max-w-md text-lg text-steel">
-            Покупатель пишет сразу в три магазина и покупает там, где ответили первым. Обычно это
-            вечер, когда менеджер уже дома.
-          </p>
+      <div className="grid grid-cols-1 gap-14 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className="lg:sticky lg:top-28 lg:self-start">
+          <SectionTitle
+            title="Пока магазин закрыт"
+            text="Покупатель пишет сразу в три магазина и покупает там, где ответили первым. Обычно это вечер, когда менеджер уже дома."
+          />
         </div>
-        <ol className="relative flex flex-col gap-0 border-l-2 border-sky pl-8">
-          {NIGHT.map((item) => (
-            <li key={item.time} className="relative pb-10 last:pb-0">
-              <span className="absolute top-1.5 -left-[2.4rem] size-4 rounded-full border-2 border-sky bg-canvas" />
-              <p className="flex items-baseline gap-3">
-                <span className="display text-2xl tnum">{item.time}</span>
-                <span className="text-sm font-medium text-sky-deep">{item.channel}</span>
-              </p>
-              <p className="mt-2 max-w-xl text-steel">{item.text}</p>
-            </li>
+        <ol className="relative flex flex-col gap-4">
+          <span
+            aria-hidden
+            className="absolute top-3 bottom-3 left-[1.15rem] w-px bg-gradient-to-b from-glow via-sky/40 to-sun/60"
+          />
+          {NIGHT.map((item, index) => (
+            <Reveal as="li" key={item.time} delay={index * 120} className="relative pl-12">
+              <span className="absolute top-5 left-[0.65rem] size-4 rounded-full border-2 border-glow bg-night shadow-[0_0_16px_var(--glow)]" />
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-white/20 hover:bg-white/[0.05]">
+                <p className="flex items-baseline gap-3">
+                  <span className="display text-2xl text-paper tnum">{item.time}</span>
+                  <span className="rounded-full bg-glow/10 px-2 py-0.5 text-xs font-medium text-glow">
+                    {item.channel}
+                  </span>
+                </p>
+                <p className="mt-2 text-paper/65">{item.text}</p>
+              </div>
+            </Reveal>
           ))}
         </ol>
       </div>
@@ -237,103 +316,58 @@ function Night() {
   );
 }
 
-function PriceCheck() {
-  return (
-    <div className="relative overflow-hidden rounded-xl bg-ink p-6 text-paper sm:p-8">
-      <div className="pointer-events-none absolute inset-0 ornament opacity-50" />
-      <div className="relative">
-        <ShieldCheck className="size-8 text-sun" aria-hidden />
-        <h3 className="mt-4 text-2xl sm:text-[2rem] sm:leading-tight">Не придумывает цены</h3>
-        <p className="mt-3 max-w-md text-paper/80">
-          Каждую сумму и артикул в ответе Satushy сверяет с каталогом до отправки. Не совпало —
-          покупатель этот ответ не увидит.
-        </p>
-        <div className="mt-8 flex max-w-sm flex-col gap-2" aria-hidden>
-          <p className="self-start rounded-xl rounded-bl-sm bg-paper px-4 py-2.5 text-ink">
-            «Букет из 15 розовых пионов» — 32 000 ₸, в наличии 6 шт.
-          </p>
-          <p className="flex items-center gap-2 self-start rounded-full bg-sun px-3 py-1 text-sm font-medium text-ink">
-            <ShieldCheck className="size-4" />
-            32 000 ₸ совпадает с каталогом
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Skills() {
   return (
-    <section id="skills" className="bg-paper py-20 lg:py-28">
-      <div className="mx-auto w-full max-w-6xl px-4 sm:px-8">
-        <h2 className="max-w-2xl text-[2rem] leading-tight sm:text-[2.75rem]">
-          Работает как лучший продавец, которого не нужно учить дважды
-        </h2>
-        <div className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
-          <PriceCheck />
-          <ul className="flex flex-col divide-y divide-line">
-            {SKILLS.map(({ icon: Icon, title, text }) => (
-              <li key={title} className="flex gap-4 py-5 first:pt-0 last:pb-0">
-                <Icon className="mt-0.5 size-6 shrink-0 text-sky-deep" aria-hidden />
-                <div>
-                  <h3 className="text-lg">{title}</h3>
-                  <p className="mt-1 text-steel">{text}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+    <section id="skills" className="relative scroll-mt-20 overflow-hidden py-24 lg:py-32">
+      <div
+        aria-hidden
+        className="aurora top-40 left-1/2 h-[30rem] w-[50rem] -translate-x-1/2 bg-sky/15"
+      />
+      <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-8">
+        <SectionTitle
+          title="Продавец, которого не нужно учить дважды"
+          text="Наведите курсор на карточки — каждая показывает, как это работает."
+        />
+        <div className="mt-14">
+          <Bento />
         </div>
       </div>
-    </section>
-  );
-}
-
-function Channels() {
-  return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-8">
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <h2 className="max-w-lg text-[2rem] leading-tight sm:text-[2.75rem]">
-          Там, где вам уже пишут
-        </h2>
-        <p className="max-w-sm text-steel">
-          Все переписки из всех каналов — в одном окне кабинета, с пометкой, кто сейчас отвечает:
-          бот или человек.
-        </p>
-      </div>
-      <ul className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line lg:grid-cols-4">
-        {CHANNELS.map(({ icon: Icon, name, note }) => (
-          <li key={name} className="flex flex-col gap-3 bg-paper p-5 sm:p-6">
-            <Icon className="size-6 text-sky-deep" aria-hidden />
-            <span className="display text-xl">{name}</span>
-            <span className="text-sm text-steel">{note}</span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
 
 function Start() {
   return (
-    <section id="start" className="scroll-mt-6 bg-ink py-20 text-paper lg:py-28">
-      <div className="on-ink mx-auto w-full max-w-6xl px-4 sm:px-8">
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <h2 className="max-w-xl text-[2rem] leading-tight sm:text-[2.75rem]">
-            Подключение за один день, без программиста
-          </h2>
-          <Link href="/signup" className={buttonVariants({ variant: "onInk" })}>
-            Начать настройку
-          </Link>
+    <section
+      id="start"
+      className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-24 sm:px-8 lg:py-32"
+    >
+      <div className="grid grid-cols-1 items-start gap-14 lg:grid-cols-2">
+        <div>
+          <SectionTitle
+            title="Подключение за один день"
+            text="Без программиста. Мастер проведёт по пяти шагам, прерваться можно в любой момент."
+          />
+          <ol className="mt-10 flex flex-col gap-6">
+            {STEPS.map(([title, text], index) => (
+              <Reveal as="li" key={title} delay={index * 90} className="flex gap-4">
+                <span className="display flex size-11 shrink-0 items-center justify-center rounded-lg border border-glow/30 bg-glow/10 text-lg text-glow tnum shadow-[0_0_24px_-6px_var(--glow)]">
+                  {index + 1}
+                </span>
+                <div>
+                  <h3 className="text-lg text-paper">{title}</h3>
+                  <p className="mt-1 text-paper/60">{text}</p>
+                </div>
+              </Reveal>
+            ))}
+          </ol>
         </div>
-        <ol className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-5 lg:gap-6">
-          {STEPS.map((step, index) => (
-            <li key={step.title} className="border-t-2 border-sky pt-4">
-              <span className="display text-4xl text-sky tnum">{index + 1}</span>
-              <h3 className="mt-3 text-lg">{step.title}</h3>
-              <p className="mt-2 text-sm text-paper/75">{step.text}</p>
-            </li>
-          ))}
-        </ol>
+        <Reveal delay={150} className="min-w-0 lg:sticky lg:top-28">
+          <ConnectCode />
+          <p className="mt-4 text-sm text-paper/50">
+            Для сайта — одна строка кода, для Telegram — токен бота. Остальное Satushy настроит сам.
+          </p>
+        </Reveal>
       </div>
     </section>
   );
@@ -343,94 +377,96 @@ function Price() {
   return (
     <section
       id="price"
-      className="mx-auto w-full max-w-6xl scroll-mt-6 px-4 py-20 sm:px-8 lg:py-28"
+      className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-24 sm:px-8 lg:py-32"
     >
-      <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
-        <div>
-          <h2 className="text-[2rem] leading-tight sm:text-[2.75rem]">
-            Платите за ответы, а не за подписку
-          </h2>
-          <p className="mt-4 max-w-md text-lg text-steel">
-            Нет абонентской платы и тарифов. Пополняете баланс в тенге — с него списываются только
-            ответы бота покупателям.
-          </p>
-        </div>
-        <ul className="flex flex-col divide-y divide-line panel p-0">
-          {[
-            ["Ответ бота", "несколько тенге, цена видна у каждого сообщения"],
-            ["Песочница и автотест", "бесплатно"],
-            ["Ответы менеджера", "бесплатно"],
-            ["Пополнение", "по счёту для ТОО и ИП"],
-            ["Предупреждения", "когда на балансе остаётся 20% и 5%"],
-          ].map(([name, value]) => (
-            <li
-              key={name}
-              className="flex flex-wrap justify-between gap-x-6 gap-y-1 px-5 py-4 sm:px-6"
-            >
-              <span className="font-medium">{name}</span>
-              <span className="text-steel">{value}</span>
-            </li>
-          ))}
-        </ul>
+      <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+        <SectionTitle
+          title="Платите за ответы, а не за подписку"
+          text="Пополняете баланс в тенге — с него списываются только ответы бота покупателям."
+        />
+        <Reveal delay={120}>
+          <div className="glow-border rounded-xl">
+            <div className="rounded-xl bg-night-2 p-6 sm:p-8">
+              <p className="text-paper/60">Абонентская плата</p>
+              <p className="display mt-1 text-[4rem] leading-none text-paper">
+                0&nbsp;<span className="text-sky-gradient">₸</span>
+              </p>
+              <ul className="mt-8 divide-y divide-white/10">
+                {PRICE.map(([name, value]) => (
+                  <li key={name} className="flex flex-wrap justify-between gap-x-6 gap-y-1 py-3">
+                    <span className="font-medium text-paper">{name}</span>
+                    <span className="text-paper/60">{value}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-function Questions() {
+function Faq() {
   return (
-    <section className="bg-paper py-20 lg:py-28">
-      <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 sm:px-8 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
-        <h2 className="text-[2rem] leading-tight sm:text-[2.75rem]">Частые вопросы</h2>
-        <div className="divide-y divide-line border-y border-line">
-          {FAQ.map((item) => (
-            <details key={item.q} className="group py-1">
-              <summary className="flex min-h-14 list-none items-center justify-between gap-4 text-lg font-medium [&::-webkit-details-marker]:hidden">
-                {item.q}
-                <span
-                  aria-hidden
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-soft text-xl text-sky-deep transition-transform group-open:rotate-45"
-                >
-                  +
-                </span>
-              </summary>
-              <p className="max-w-2xl pb-5 text-steel">{item.a}</p>
-            </details>
-          ))}
-        </div>
-      </div>
+    <section className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-24 sm:px-8 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:py-32">
+      <SectionTitle title="Частые вопросы" />
+      <Reveal className="flex flex-col gap-3">
+        {FAQ.map((item) => (
+          <details
+            key={item.q}
+            className="group rounded-xl border border-white/10 bg-white/[0.03] px-5 transition-colors open:border-glow/40 open:bg-white/[0.05]"
+          >
+            <summary className="flex min-h-16 list-none items-center justify-between gap-4 text-lg font-medium text-paper [&::-webkit-details-marker]:hidden">
+              {item.q}
+              <span
+                aria-hidden
+                className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/15 text-xl text-glow transition-transform duration-300 group-open:rotate-45"
+              >
+                +
+              </span>
+            </summary>
+            <p className="max-w-2xl pb-5 text-paper/65">{item.a}</p>
+          </details>
+        ))}
+      </Reveal>
     </section>
   );
 }
 
 function Final() {
   return (
-    <section className="px-4 py-16 sm:px-8">
-      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl bg-sky px-6 py-14 sm:px-14 sm:py-20">
-        <div className="pointer-events-none absolute inset-0 ornament opacity-55" />
-        <div className="relative max-w-2xl">
-          <h2 className="text-[2.25rem] leading-tight sm:text-[3.25rem]">
-            Посмотрите кабинет изнутри
+    <section className="px-4 pb-16 sm:px-8">
+      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-night-2 px-6 py-20 text-center sm:px-14 sm:py-28">
+        <div
+          aria-hidden
+          className="absolute inset-0 grid-lines [mask-image:radial-gradient(ellipse_at_50%_100%,#000,transparent_70%)]"
+        />
+        <div
+          aria-hidden
+          className="absolute bottom-[-18rem] left-1/2 h-[28rem] w-[50rem] animate-[sunrise_7s_ease-in-out_infinite] rounded-full bg-[radial-gradient(closest-side,rgb(255_198_41/0.7),rgb(255_159_67/0.25)_45%,transparent_70%)] blur-xl"
+        />
+        <div aria-hidden className="grain absolute inset-0" />
+        <Reveal className="relative mx-auto max-w-2xl">
+          <h2 className="text-[2.25rem] leading-tight text-paper sm:text-[3.5rem]">
+            Пусть первым ответит ваш магазин
           </h2>
-          <p className="mt-4 text-lg text-ink/85">
-            В демо-магазине уже есть неделя диалогов, заявки и аналитика. Перехватите диалог,
+          <p className="mt-4 text-lg text-paper/65">
+            В демо-кабинете уже есть две недели диалогов, заявки и аналитика. Перехватите диалог,
             поговорите с ботом в песочнице, загляните в баланс.
           </p>
-          <div className="mt-8 flex flex-wrap items-start gap-3">
-            <DemoButton variant="dark" className="min-h-12 px-6 text-base" hideWhenOff={false}>
+          <div className="mt-9 flex flex-wrap items-start justify-center gap-3">
+            <DemoButton variant="glow" className="min-h-12 px-6 text-base" hideWhenOff={false}>
               Открыть демо-кабинет
             </DemoButton>
             <Link
               href="/signup"
-              className={cn(
-                buttonVariants({ variant: "secondary" }),
-                "min-h-12 border-ink/20 bg-paper/70 px-6 text-base hover:bg-paper",
-              )}
+              className={cn(buttonVariants({ variant: "glass" }), "min-h-12 px-6 text-base")}
             >
               Зарегистрировать магазин
             </Link>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -438,27 +474,28 @@ function Final() {
 
 export default function Landing() {
   return (
-    <div className="min-h-svh bg-canvas">
+    <div className="on-ink min-h-svh overflow-x-clip bg-night text-paper">
       <a
         href="#main"
-        className="absolute top-2 left-2 z-50 -translate-y-20 rounded-md bg-ink px-3 py-2 text-sm text-paper focus:translate-y-0"
+        className="absolute top-2 left-2 z-50 -translate-y-20 rounded-md bg-paper px-3 py-2 text-sm text-ink focus:translate-y-0"
       >
         Перейти к содержимому
       </a>
+      <Nav />
       <Hero />
       <main id="main">
+        <Questions />
         <Night />
         <Skills />
-        <Channels />
         <Start />
         <Price />
-        <Questions />
+        <Faq />
         <Final />
       </main>
-      <footer className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 pt-4 pb-10 text-sm text-steel sm:px-8">
-        <Wordmark className="text-lg" />
+      <footer className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 border-t border-white/[0.06] px-4 pt-8 pb-10 text-sm text-paper/50 sm:px-8">
+        <Wordmark tone="paper" className="text-lg" />
         <p>Бот-продавец для магазинов Казахстана. © 2026 Satushy</p>
-        <Link href="/login" className="font-medium text-ink underline underline-offset-2">
+        <Link href="/login" className="font-medium text-paper underline underline-offset-2">
           Войти в кабинет
         </Link>
       </footer>
