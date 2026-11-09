@@ -31,7 +31,10 @@ export function Stepper({
               className="flex min-h-11 w-full flex-col gap-1.5 text-left disabled:cursor-not-allowed"
             >
               <span
-                className={cn("h-1 w-full rounded-sm", done || active ? "bg-ink" : "bg-haze")}
+                className={cn(
+                  "h-1 w-full rounded-sm",
+                  active ? "bg-ink" : done ? "bg-sky" : "bg-haze",
+                )}
               />
               <span
                 className={cn(

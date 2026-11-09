@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const control =
-  "w-full rounded-md border border-control bg-paper px-3 text-base text-ink transition-colors hover:border-ink disabled:bg-mist disabled:text-steel aria-invalid:border-alert";
+  "w-full rounded-md border border-control/70 bg-paper px-3 text-base text-ink transition-colors hover:border-ink focus-visible:border-sky-deep disabled:bg-mist disabled:text-steel aria-invalid:border-alert";
 
 type Common = { label: ReactNode; hint?: ReactNode; error?: string | null };
 

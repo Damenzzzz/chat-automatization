@@ -63,7 +63,7 @@ function Bubble({ message }: { message: Message }) {
           "rounded-lg px-3.5 py-2 whitespace-pre-wrap",
           "[overflow-wrap:anywhere]",
           fromCustomer && "border border-line bg-paper",
-          message.role === "bot" && "bg-haze",
+          message.role === "bot" && "bg-sky-soft",
           message.role === "manager" && "bg-ink text-paper",
         )}
       >
@@ -267,7 +267,7 @@ export function Thread({ id }: { id: string }) {
         <header
           className={cn(
             "flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2.5 transition-colors duration-300 sm:px-6",
-            human ? "on-ink border-ink bg-ink text-paper" : "border-line bg-mist text-ink",
+            human ? "on-ink border-ink bg-ink text-paper" : "border-line bg-paper text-ink",
           )}
         >
           <Link

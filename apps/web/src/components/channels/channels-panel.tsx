@@ -102,7 +102,7 @@ function ChannelBlock({
   children?: ReactNode;
 }) {
   return (
-    <section className="border-t border-line py-6">
+    <section className="mb-4 panel p-5 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="text-lg">{title}</h2>
         {status}

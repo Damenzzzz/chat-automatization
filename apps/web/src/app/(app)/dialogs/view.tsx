@@ -50,7 +50,7 @@ function RowLink({ row, active, filter }: { row: Row; active: boolean; filter: F
     <Link
       href={`/dialogs?${params}`}
       aria-current={active ? "true" : undefined}
-      className={cn("block px-4 py-3 hover:bg-mist", active && "bg-haze hover:bg-haze")}
+      className={cn("block px-4 py-3 hover:bg-mist", active && "bg-sky-soft hover:bg-sky-soft")}
     >
       <span className="flex items-baseline justify-between gap-3">
         <span
@@ -60,7 +60,7 @@ function RowLink({ row, active, filter }: { row: Row; active: boolean; filter: F
             <>
               <span
                 aria-hidden
-                className="mr-1.5 inline-block size-2 rounded-full bg-ink align-middle"
+                className="mr-1.5 inline-block size-2.5 rounded-full border border-ink bg-sun align-middle"
               />
               <span className="sr-only">Ждёт ответа. </span>
             </>

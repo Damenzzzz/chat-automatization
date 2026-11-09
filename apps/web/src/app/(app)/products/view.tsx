@@ -109,33 +109,35 @@ export function ProductsView() {
       )}
       {data && data.items.length > 0 && (
         <>
-          <table className="w-full text-sm max-md:block">
-            <caption className="sr-only">Товары каталога</caption>
-            <thead className="text-left text-steel max-md:sr-only">
-              <tr className="border-b border-line">
-                <th scope="col" className="py-2 pr-4 font-normal">
-                  Название
-                </th>
-                <th scope="col" className="py-2 pr-4 font-normal">
-                  Артикул
-                </th>
-                <th scope="col" className="py-2 pr-4 font-normal">
-                  Категория
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-normal">
-                  Цена
-                </th>
-                <th scope="col" className="py-2 text-right font-normal">
-                  Остаток
-                </th>
-              </tr>
-            </thead>
-            <tbody className="max-md:block">
-              {data.items.map((product) => (
-                <Row key={product.id} product={product} />
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-hidden panel px-4 sm:px-5">
+            <table className="w-full text-sm max-md:block">
+              <caption className="sr-only">Товары каталога</caption>
+              <thead className="text-left text-steel max-md:sr-only">
+                <tr className="border-b border-line">
+                  <th scope="col" className="py-2 pr-4 font-normal">
+                    Название
+                  </th>
+                  <th scope="col" className="py-2 pr-4 font-normal">
+                    Артикул
+                  </th>
+                  <th scope="col" className="py-2 pr-4 font-normal">
+                    Категория
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right font-normal">
+                    Цена
+                  </th>
+                  <th scope="col" className="py-2 text-right font-normal">
+                    Остаток
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="max-md:block">
+                {data.items.map((product) => (
+                  <Row key={product.id} product={product} />
+                ))}
+              </tbody>
+            </table>
+          </div>
           {total > PAGE_SIZE && (
             <nav aria-label="Страницы каталога" className="mt-4 flex items-center gap-3">
               <Button

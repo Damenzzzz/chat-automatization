@@ -105,7 +105,7 @@ export function SandboxChat() {
             className={cn(
               "max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
               line.from === "me" && "self-start border border-line",
-              line.from === "bot" && "self-end bg-haze",
+              line.from === "bot" && "self-end bg-sky-soft",
               line.from === "note" && "max-w-full self-center text-center text-steel",
             )}
           >

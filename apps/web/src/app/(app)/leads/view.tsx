@@ -82,9 +82,9 @@ export function LeadsView() {
           Проверьте в песочнице, как бот принимает заказ, или подключите канал.
         </Empty>
       )}
-      <ul className="grid gap-x-8 md:grid-cols-2">
+      <ul className="grid gap-4 md:grid-cols-2">
         {rows.map((lead) => (
-          <li key={lead.id} className="border-t border-line py-5">
+          <li key={lead.id} className="panel p-5">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 text-xs text-steel">
               <span>
                 {fullDate(lead.created_at)}

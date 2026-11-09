@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 
 const kinds = {
   error: { icon: CircleAlert, box: "border-alert bg-alert-soft text-alert" },
-  success: { icon: CircleCheck, box: "border-ink bg-paper text-ink" },
-  info: { icon: Info, box: "border-line bg-mist text-ink" },
+  success: { icon: CircleCheck, box: "border-sky bg-sky-soft text-ink" },
+  info: { icon: Info, box: "border-line bg-paper text-ink" },
 };
 
 export function Notice({

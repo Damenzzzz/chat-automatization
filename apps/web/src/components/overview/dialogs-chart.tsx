@@ -54,7 +54,7 @@ export function DialogsChart({ days }: { days: Day[] }) {
             <div
               className={cn(
                 "w-full max-w-10 rounded-t-sm transition-colors",
-                index === active ? "bg-ink" : "bg-control",
+                index === active ? "bg-ink" : "bg-sky",
               )}
               style={{ height: day.dialogs ? `${Math.max(3, (day.dialogs / max) * 100)}%` : 0 }}
             />

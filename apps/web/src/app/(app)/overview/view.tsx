@@ -101,7 +101,7 @@ function TopQueries({ items }: { items: Schemas["TopQueryOut"][] }) {
           </div>
           <div aria-hidden className="mt-1 h-1 rounded-sm bg-haze">
             <div
-              className="h-full rounded-sm bg-control"
+              className="h-full rounded-sm bg-sky"
               style={{ width: `${(item.count / max) * 100}%` }}
             />
           </div>

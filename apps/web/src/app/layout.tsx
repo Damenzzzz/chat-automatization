@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Commissioner, Golos_Text } from "next/font/google";
+import { Geologica, Golos_Text } from "next/font/google";
 
 import { cn } from "@/lib/utils";
 
@@ -11,22 +11,22 @@ const golos = Golos_Text({
   display: "swap",
 });
 
-const commissioner = Commissioner({
+const geologica = Geologica({
   subsets: ["latin", "latin-ext", "cyrillic", "cyrillic-ext"],
-  axes: ["FLAR", "VOLM"],
-  variable: "--font-commissioner",
+  axes: ["SHRP"],
+  variable: "--font-geologica",
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: { default: "Satushy", template: "%s | Satushy" },
   description:
-    "AI-консультант, который знает весь каталог магазина и отвечает покупателям в WhatsApp, Instagram, Telegram и на сайте.",
+    "Бот-продавец для магазинов Казахстана: знает весь каталог и отвечает покупателям в WhatsApp, Instagram, Telegram и на сайте на казахском и русском.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ru" className={cn(golos.variable, commissioner.variable)}>
+    <html lang="ru" className={cn(golos.variable, geologica.variable)}>
       <body>{children}</body>
     </html>
   );
