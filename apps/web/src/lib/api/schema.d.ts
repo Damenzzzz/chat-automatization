@@ -926,6 +926,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Demo Status */
+        get: operations["demo_status_demo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/demo/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Login */
+        post: operations["demo_login_demo_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/demo/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Chat */
+        post: operations["demo_chat_demo_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1092,6 +1143,13 @@ export interface components {
             /** Error */
             error?: string | null;
         };
+        /** CodeSentOut */
+        CodeSentOut: {
+            /** Sent */
+            sent: boolean;
+            /** Demo Code */
+            demo_code?: string | null;
+        };
         /** ColumnMapping */
         ColumnMapping: {
             /** Column */
@@ -1242,6 +1300,54 @@ export interface components {
             products: components["schemas"]["ProductOut"][];
             /** Kb */
             kb: components["schemas"]["KbOut"][];
+        };
+        /** DemoCard */
+        DemoCard: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Sku */
+            sku: string | null;
+            /** Price */
+            price: number | null;
+            /** Stock */
+            stock: number | null;
+            /** Category */
+            category: string | null;
+        };
+        /** DemoChatIn */
+        DemoChatIn: {
+            /** Message */
+            message: string;
+            /** Session Id */
+            session_id: string;
+        };
+        /** DemoChatOut */
+        DemoChatOut: {
+            /** Reply */
+            reply: string | null;
+            /** Lang */
+            lang: string | null;
+            /** Intent */
+            intent: string | null;
+            /** Human Mode */
+            human_mode: boolean;
+            /** Cards */
+            cards: components["schemas"]["DemoCard"][];
+        };
+        /** DemoStatus */
+        DemoStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Shop Name
+             * @default Цветы Пион
+             */
+            shop_name: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1453,6 +1559,11 @@ export interface components {
             role: string;
             /** Impersonated By */
             impersonated_by: string | null;
+            /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
         };
         /** MemberOut */
         MemberOut: {
@@ -1976,9 +2087,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
+                    "application/json": components["schemas"]["CodeSentOut"];
                 };
             };
             /** @description Validation Error */
@@ -3870,6 +3979,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_status_demo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoStatus"];
+                };
+            };
+        };
+    };
+    demo_login_demo_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+        };
+    };
+    demo_chat_demo_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemoChatIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoChatOut"];
                 };
             };
             /** @description Validation Error */

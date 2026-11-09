@@ -114,10 +114,14 @@ async def seed_demo() -> SeedResult:
 async def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level, json=settings.env == "prod")
+    from app.demo.service import ensure_demo_shop
+
     result = await seed_demo()
-    await get_queue().enqueue(
+    queue = get_queue()
+    await queue.enqueue(
         "reindex_embeddings", str(result.tenant_id), job_id=f"reindex:{result.tenant_id}"
     )
+    await ensure_demo_shop(queue)
     log.info(
         "seed.done",
         tenant_id=str(result.tenant_id),

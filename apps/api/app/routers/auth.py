@@ -52,13 +52,18 @@ class VerifyIn(IdentityIn):
     signup: SignupIn | None = None
 
 
+class CodeSentOut(BaseModel):
+    sent: bool
+    demo_code: str | None = None
+
+
 class SessionOut(BaseModel):
     user_id: uuid.UUID
     tenant_id: uuid.UUID
     role: str
 
 
-async def _start_session(response: Response, user: UserRef, store: RefreshStore) -> SessionOut:
+async def start_session(response: Response, user: UserRef, store: RefreshStore) -> SessionOut:
     settings = get_settings()
     access = create_access_token(AccessClaims(user.id, user.tenant_id, user.role), settings)
     refresh = await store.issue(user.id, user.tenant_id)
@@ -72,7 +77,7 @@ async def request_code(
     body: IdentityIn,
     otp: Annotated[OtpService, Depends(get_otp)],
     sender: Annotated[CodeSender, Depends(get_code_sender)],
-) -> dict[str, bool]:
+) -> CodeSentOut:
     try:
         code = await otp.issue(body.identity)
     except OtpError as exc:
@@ -81,7 +86,7 @@ async def request_code(
         await sender.send(body.identity, code)
     except SenderUnavailableError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "channel_unavailable") from exc
-    return {"sent": True}
+    return CodeSentOut(sent=True, demo_code=code if get_settings().demo_enabled else None)
 
 
 @router.post("/verify")
@@ -110,7 +115,7 @@ async def verify(
             raise HTTPException(status.HTTP_409_CONFLICT, "already_registered") from exc
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "user_disabled")
-    return await _start_session(response, user, store)
+    return await start_session(response, user, store)
 
 
 @router.post("/refresh")
@@ -124,7 +129,7 @@ async def refresh(
     if user is None or not user.is_active:
         clear_auth_cookies(response)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid_refresh")
-    return await _start_session(response, user, store)
+    return await start_session(response, user, store)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     bot_replies_per_hour: int = 30
     unanswered_group_threshold: float = 0.85
 
+    demo_enabled: bool = False
+
     public_api_url: str = "http://localhost:8100"
     public_web_url: str = "http://localhost:3000"
     channel_debounce_seconds: float = 1.5
