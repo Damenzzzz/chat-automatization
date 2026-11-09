@@ -109,3 +109,14 @@ async def test_request_code_shows_code_in_demo(
     assert response.status_code == 202
     code = response.json().get("demo_code")
     assert (code is not None and len(code) == 6) is shown
+
+
+async def test_request_code_hides_code_in_prod(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "demo_enabled", True)
+    monkeypatch.setattr(settings, "env", "prod")
+    response = await client.post("/auth/request-code", json={"phone": random_phone()})
+    assert response.status_code == 202
+    assert response.json().get("demo_code") is None

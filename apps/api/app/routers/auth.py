@@ -86,7 +86,9 @@ async def request_code(
         await sender.send(body.identity, code)
     except SenderUnavailableError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "channel_unavailable") from exc
-    return CodeSentOut(sent=True, demo_code=code if get_settings().demo_enabled else None)
+    settings = get_settings()
+    show = settings.demo_enabled and settings.env != "prod"
+    return CodeSentOut(sent=True, demo_code=code if show else None)
 
 
 @router.post("/verify")
