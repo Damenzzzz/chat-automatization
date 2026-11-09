@@ -32,6 +32,7 @@ const MESSAGES: Record<string, string> = {
   no_previous_version: "Предыдущей версии нет.",
   telegram_not_connected: "Сначала подключите Telegram-бота на странице «Каналы».",
   cannot_remove_self: "Нельзя удалить самого себя.",
+  demo_disabled: "Демо-режим выключен на этом сервере. Зарегистрируйте свой магазин.",
 };
 
 export class ApiError extends Error {

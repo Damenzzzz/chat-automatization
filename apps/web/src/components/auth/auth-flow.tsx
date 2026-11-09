@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
+import { DemoButton } from "@/components/auth/demo-button";
 import { Button } from "@/components/ui/button";
 import { SelectField, TextField } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
@@ -50,7 +51,7 @@ function CodeInput({
         inputMode="numeric"
         autoComplete="one-time-code"
         pattern="[0-9]*"
-        className="display min-h-16 w-full rounded-md border border-control bg-paper px-4 text-center text-2xl tracking-[0.35em] tnum hover:border-ink disabled:bg-mist"
+        className="min-h-16 w-full rounded-md border border-control/70 bg-paper px-4 text-center text-2xl font-semibold tracking-[0.35em] tnum hover:border-ink focus-visible:border-sky-deep disabled:bg-mist"
       />
     </div>
   );
@@ -101,6 +102,7 @@ export function AuthFlow({ mode }: { mode: "login" | "signup" }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [wait, setWait] = useState(0);
+  const [demoCode, setDemoCode] = useState<string | null>(null);
   const lastTried = useRef("");
 
   useEffect(() => {
@@ -113,7 +115,8 @@ export function AuthFlow({ mode }: { mode: "login" | "signup" }) {
     setBusy(true);
     setError(null);
     try {
-      await unwrap(authApi.POST("/auth/request-code", { body: target }));
+      const sent = await unwrap(authApi.POST("/auth/request-code", { body: target }));
+      setDemoCode(sent.demo_code ?? null);
       setCode("");
       lastTried.current = "";
       setWait(RESEND_SECONDS);
@@ -217,6 +220,21 @@ export function AuthFlow({ mode }: { mode: "login" | "signup" }) {
             {identity && ("email" in identity ? identity.email : identity.phone)}.
           </p>
         </div>
+        {demoCode && (
+          <Notice>
+            <p>
+              Демо-режим: SMS и письма не отправляем. Ваш код —{" "}
+              <strong className="tnum">{demoCode}</strong>.
+            </p>
+            <button
+              type="button"
+              className="mt-1 font-semibold underline underline-offset-2"
+              onClick={() => changeCode(demoCode)}
+            >
+              Подставить код
+            </button>
+          </Notice>
+        )}
         <CodeInput value={code} onChange={changeCode} disabled={busy} />
         <FormError error={error} />
         <Button type="submit" loading={busy} disabled={code.length !== 6}>
@@ -274,6 +292,14 @@ export function AuthFlow({ mode }: { mode: "login" | "signup" }) {
       <Button type="submit" loading={busy}>
         Получить код
       </Button>
+      {mode === "login" && (
+        <div className="flex flex-col gap-3 border-t border-line pt-4">
+          <p className="text-sm text-steel">
+            Хотите сначала посмотреть? Демо-магазин цветов с диалогами, заявками и живым ботом.
+          </p>
+          <DemoButton />
+        </div>
+      )}
       <p className="text-sm text-steel">
         {mode === "signup" ? "Уже есть кабинет? " : "Ещё нет кабинета? "}
         <Link
