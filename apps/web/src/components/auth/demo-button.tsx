@@ -33,7 +33,7 @@ export function DemoButton({
   hideWhenOff = true,
 }: {
   children?: ReactNode;
-  variant?: "primary" | "secondary" | "dark" | "onInk";
+  variant?: "primary" | "secondary" | "dark" | "onInk" | "glow" | "glass";
   className?: string;
   hideWhenOff?: boolean;
 }) {
