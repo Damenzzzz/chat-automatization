@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
 import useSWR from "swr";
 
 import { api, type Schemas } from "@/lib/api/client";
@@ -16,15 +16,23 @@ type Session = {
 
 const SessionContext = createContext<Session | null>(null);
 
+const noop = () => () => {};
+
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const hydrated = useSyncExternalStore(
+    noop,
+    () => true,
+    () => false,
+  );
   const me = useSWR("/me", () => unwrap(api.GET("/me")));
   const shop = useSWR("/shop", () => unwrap(api.GET("/shop")));
+  const meData = hydrated ? me.data : undefined;
   return (
     <SessionContext.Provider
       value={{
-        me: me.data,
-        shop: shop.data,
-        isOwner: me.data?.role === "owner" || me.data?.role === "admin",
+        me: meData,
+        shop: hydrated ? shop.data : undefined,
+        isOwner: meData?.role === "owner" || meData?.role === "admin",
         error: me.error ?? shop.error,
         retry: () => {
           void me.mutate();
