@@ -1,15 +1,17 @@
 from decimal import Decimal
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEV_SECRET_PREFIX = "dev-only"  # noqa: S105
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    env: Literal["dev", "test", "prod"] = "dev"
+    env: Literal["dev", "test", "prod"]
     log_level: str = "INFO"
 
     database_url: str
@@ -75,11 +77,21 @@ class Settings(BaseSettings):
     unanswered_group_threshold: float = 0.85
 
     demo_enabled: bool = False
+    demo_chat_daily_limit: int = 3000
+    sandbox_messages_per_hour: int = 120
+    sandbox_autotests_per_hour: int = 6
+    widget_channel_messages_per_hour: int = 600
 
     public_api_url: str = "http://localhost:8100"
     public_web_url: str = "http://localhost:3000"
     channel_debounce_seconds: float = 1.5
     whatsapp_graph_version: str = "v25.0"
+
+    @model_validator(mode="after")
+    def no_dev_secrets_in_prod(self) -> Self:
+        if self.env == "prod" and self.jwt_secret.get_secret_value().startswith(DEV_SECRET_PREFIX):
+            raise ValueError("JWT_SECRET из .env.example нельзя использовать при ENV=prod")
+        return self
 
     @property
     def cookie_secure(self) -> bool:
