@@ -56,10 +56,15 @@ export function ProductsView() {
     return () => clearTimeout(timer);
   }, [input]);
 
-  const { data, error, isLoading, mutate } = useSWR(`/products?q=${q}&offset=${offset}`, () =>
-    unwrap(
-      api.GET("/products", { params: { query: { q: q || undefined, offset, limit: PAGE_SIZE } } }),
-    ),
+  const { data, error, isLoading, mutate } = useSWR(
+    `/products?q=${q}&offset=${offset}`,
+    () =>
+      unwrap(
+        api.GET("/products", {
+          params: { query: { q: q || undefined, offset, limit: PAGE_SIZE } },
+        }),
+      ),
+    { keepPreviousData: true },
   );
   const total = data?.total ?? 0;
   const noCatalog = data && total === 0 && !q;
@@ -102,7 +107,7 @@ export function ProductsView() {
           />
         </div>
       )}
-      {isLoading && <Loading />}
+      {isLoading && !data && <Loading />}
       {error ? <LoadError error={error} retry={() => void mutate()} /> : null}
       {data && total === 0 && q && (
         <Empty title="Ничего не нашлось">Проверьте написание или поищите по артикулу.</Empty>

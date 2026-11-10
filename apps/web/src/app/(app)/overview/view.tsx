@@ -163,14 +163,20 @@ export function OverviewView() {
   const [days, setDays] = useState(7);
   const range = useMemo(() => rangeOf(days), [days]);
   const suffix = `${range.date_from}&${range.date_to}`;
-  const overview = useSWR(`/analytics/overview?${suffix}`, () =>
-    unwrap(api.GET("/analytics/overview", { params: { query: range } })),
+  const overview = useSWR(
+    `/analytics/overview?${suffix}`,
+    () => unwrap(api.GET("/analytics/overview", { params: { query: range } })),
+    { keepPreviousData: true },
   );
-  const series = useSWR(`/analytics/dialogs_by_day?${suffix}`, () =>
-    unwrap(api.GET("/analytics/dialogs_by_day", { params: { query: range } })),
+  const series = useSWR(
+    `/analytics/dialogs_by_day?${suffix}`,
+    () => unwrap(api.GET("/analytics/dialogs_by_day", { params: { query: range } })),
+    { keepPreviousData: true },
   );
-  const queries = useSWR(`/analytics/top_queries?${suffix}`, () =>
-    unwrap(api.GET("/analytics/top_queries", { params: { query: range } })),
+  const queries = useSWR(
+    `/analytics/top_queries?${suffix}`,
+    () => unwrap(api.GET("/analytics/top_queries", { params: { query: range } })),
+    { keepPreviousData: true },
   );
 
   return (
@@ -198,7 +204,7 @@ export function OverviewView() {
       >
         <BalanceLine />
       </PageHeader>
-      {overview.isLoading && <Loading />}
+      {overview.isLoading && !overview.data && <Loading />}
       {overview.error ? (
         <LoadError error={overview.error} retry={() => void overview.mutate()} />
       ) : null}
