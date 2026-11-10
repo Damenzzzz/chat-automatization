@@ -18,8 +18,15 @@ export function InboxStream() {
     function connect() {
       source = new EventSource("/api/conversations/stream");
       source.addEventListener("change", (event) => {
-        const { leads } = JSON.parse((event as MessageEvent<string>).data) as { leads: boolean };
-        void mutate((key) => typeof key === "string" && key.startsWith("/conversations"));
+        const { leads, conversations = [] } = JSON.parse((event as MessageEvent<string>).data) as {
+          leads: boolean;
+          conversations?: string[];
+        };
+        const changed = new Set(conversations.map((id) => `/conversations/${id}`));
+        void mutate(
+          (key) =>
+            typeof key === "string" && (key.startsWith("/conversations?") || changed.has(key)),
+        );
         if (leads) void mutate((key) => typeof key === "string" && key.startsWith("/leads"));
       });
       source.onerror = () => {
