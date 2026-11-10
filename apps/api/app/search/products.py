@@ -1,3 +1,4 @@
+import asyncio
 import time
 import uuid
 
@@ -42,20 +43,25 @@ async def candidate_lists(
     settings = get_settings()
     limit = settings.search_candidates
     lists: dict[str, list[uuid.UUID]] = {}
+    embedding = asyncio.ensure_future(ml.embed([query], "query"))
     try:
-        [vector] = await ml.embed([query], "query")
+        lists["fts"] = await fts_products(session, tenant_id, query, filters, limit)
+        exact: set[uuid.UUID] = set()
+        codes = sku_codes(query)
+        if codes:
+            found = await sku_products(session, tenant_id, codes, filters, limit)
+            lists["sku"] = [item_id for item_id, _ in found]
+            exact = {item_id for item_id, is_exact in found if is_exact}
+    except BaseException:
+        embedding.cancel()
+        raise
+    try:
+        [vector] = await embedding
     except MLError as exc:
         log.warning("search.embed_failed", error=str(exc))
     else:
         await enable_iterative_scan(session, settings.search_ef_search)
         lists["vector"] = await vector_products(session, tenant_id, vector, filters, limit)
-    lists["fts"] = await fts_products(session, tenant_id, query, filters, limit)
-    exact: set[uuid.UUID] = set()
-    codes = sku_codes(query)
-    if codes:
-        found = await sku_products(session, tenant_id, codes, filters, limit)
-        lists["sku"] = [item_id for item_id, _ in found]
-        exact = {item_id for item_id, is_exact in found if is_exact}
     return lists, exact
 
 
@@ -117,7 +123,7 @@ async def search_products(
     pool = pool[: settings.search_rerank_top]
 
     scores: list[float] | None = None
-    if use_reranker:
+    if use_reranker and len(pool) > 1:
         texts = [
             product_text(p.name, p.category, p.description, p.attributes, p.synonyms)
             for p in (products[f.id] for f in pool)

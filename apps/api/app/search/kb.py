@@ -1,3 +1,4 @@
+import asyncio
 import time
 import uuid
 
@@ -31,14 +32,19 @@ async def search_kb(
     ml = ml or get_ml_client()
     tenant_id = await current_tenant(session)
     lists: dict[str, list[uuid.UUID]] = {}
+    embedding = asyncio.ensure_future(ml.embed([query], "query"))
     try:
-        [vector] = await ml.embed([query], "query")
+        lists["fts"] = await fts_kb(session, tenant_id, query, settings.search_candidates)
+    except BaseException:
+        embedding.cancel()
+        raise
+    try:
+        [vector] = await embedding
     except MLError as exc:
         log.warning("search.embed_failed", error=str(exc))
     else:
         await enable_iterative_scan(session, settings.search_ef_search)
         lists["vector"] = await vector_kb(session, tenant_id, vector, settings.search_candidates)
-    lists["fts"] = await fts_kb(session, tenant_id, query, settings.search_candidates)
     fused = rrf(lists, settings.search_rrf_k)[: settings.search_rerank_top]
 
     rows = await session.scalars(select(KbChunk).where(KbChunk.id.in_([f.id for f in fused])))

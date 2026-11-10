@@ -1,3 +1,4 @@
+import asyncio
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -87,7 +88,7 @@ async def group_questions(
     method: Method = "embeddings"
     try:
         vectors = await ml.embed([q.text for q in questions], "query")
-        groups = group_by_vectors(questions, vectors, threshold)
+        groups = await asyncio.to_thread(group_by_vectors, questions, vectors, threshold)
     except MLError as exc:
         log.warning("analytics.grouping_without_embeddings", error=str(exc))
         groups, method = group_by_text(questions), "text"
