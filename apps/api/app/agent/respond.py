@@ -6,6 +6,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 
 from app.agent.prompt import ShopProfile, context_block, system_prompt
+from app.agent.session import session_start
 from app.core.config import Settings
 from app.llm import LLMResponse, Message, ToolCall
 
@@ -22,7 +23,7 @@ FALLBACK = {
 def dialog_length(messages: list[AnyMessage]) -> int:
     return sum(
         1
-        for m in messages
+        for m in messages[session_start(messages) :]
         if isinstance(m, HumanMessage)
         or (isinstance(m, AIMessage) and m.content and not m.tool_calls)
     )

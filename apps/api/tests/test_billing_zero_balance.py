@@ -395,7 +395,7 @@ async def test_link_token_of_one_shop_does_not_work_on_another_bot(
     assert queue.jobs == []
 
 
-async def test_link_requires_connected_bot_and_owner_role(
+async def test_link_requires_connected_bot(
     client: AsyncClient, owner: uuid.UUID, sender: FakeSender, owner_engine: AsyncEngine
 ) -> None:
     response = await client.post("/me/telegram/link")
@@ -403,7 +403,7 @@ async def test_link_requires_connected_bot_and_owner_role(
     assert response.json()["detail"] == "telegram_not_connected"
     _, _, phone = await create_user(owner_engine, role="manager", tenant_id=owner)
     await login(client, sender, phone)
-    assert (await client.post("/me/telegram/link")).status_code == 403
+    assert (await client.post("/me/telegram/link")).status_code == 409
 
 
 def test_notify_owner_is_registered() -> None:

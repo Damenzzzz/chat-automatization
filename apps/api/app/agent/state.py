@@ -34,6 +34,7 @@ class ChatState(TypedDict, total=False):
     reply: str | None
     flagged: bool
     started_at: float
+    duplicate: str | None
 
 
 def step(state: ChatState, node: str, **data: Any) -> list[dict[str, Any]]:

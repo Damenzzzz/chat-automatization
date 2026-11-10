@@ -68,7 +68,10 @@ async def balance_alert(session: AsyncSession, tenant_id: uuid.UUID, charge: Cha
 
 
 async def send_owner_message(
-    tenant_id: uuid.UUID, text: str, adapters: Mapping[str, ChannelAdapter]
+    tenant_id: uuid.UUID,
+    text: str,
+    adapters: Mapping[str, ChannelAdapter],
+    roles: tuple[str, ...] = ("owner",),
 ) -> int:
     async with tenant_session(tenant_id) as session:
         channel_id = await session.scalar(
@@ -80,7 +83,7 @@ async def send_owner_message(
         chats = list(
             await session.scalars(
                 select(User.telegram_chat_id).where(
-                    User.role == "owner", User.is_active, User.telegram_chat_id.is_not(None)
+                    User.role.in_(roles), User.is_active, User.telegram_chat_id.is_not(None)
                 )
             )
         )

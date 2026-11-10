@@ -14,6 +14,7 @@ from app.agent.guard import check_reply
 from app.agent.llmcall import call_llm
 from app.agent.prompt import load_profile
 from app.agent.respond import FALLBACK, ai_message, build_messages, pick_model, tool_message
+from app.agent.session import new_session
 from app.agent.state import ChatState, step
 from app.agent.tools import TOOLS, ToolBox, merge_context
 from app.agent.understand import (
@@ -89,26 +90,52 @@ class AgentNodes:
     async def ingest(self, state: ChatState) -> dict[str, Any]:
         conversation_id = uuid.UUID(state["conversation_id"])
         text = last_human(state)
+        external_id = state.get("external_id")
+        duplicate: str | None = None
         async with tenant_session(self.tenant(state)) as session:
             mode = await session.scalar(
                 select(Conversation.mode).where(Conversation.id == conversation_id)
             )
-            message = Message(
-                tenant_id=self.tenant(state),
-                conversation_id=conversation_id,
-                role="customer",
-                content=text or None,
-                media={"items": state["media"]} if state.get("media") else None,
-                external_id=state.get("external_id"),
-            )
-            session.add(message)
-            await session.flush()
-            await session.execute(
-                update(Conversation)
-                .where(Conversation.id == conversation_id)
-                .values(last_message_at=func.now())
-            )
+            message = None
+            if external_id:
+                message = await session.scalar(
+                    select(Message)
+                    .where(
+                        Message.conversation_id == conversation_id,
+                        Message.role == "customer",
+                        Message.external_id == external_id,
+                    )
+                    .limit(1)
+                )
+            if message is not None:
+                duplicate = await self.repeated(session, message)
+            else:
+                message = Message(
+                    tenant_id=self.tenant(state),
+                    conversation_id=conversation_id,
+                    role="customer",
+                    content=text or None,
+                    media={"items": state["media"]} if state.get("media") else None,
+                    external_id=external_id,
+                )
+                session.add(message)
+                await session.flush()
+                await session.execute(
+                    update(Conversation)
+                    .where(Conversation.id == conversation_id)
+                    .values(last_message_at=func.now())
+                )
+        if duplicate:
+            log.warning("agent.turn_repeated", conversation_id=str(conversation_id), was=duplicate)
+            return {
+                "duplicate": duplicate,
+                "human_mode": mode == "human",
+                "customer_message_id": str(message.id),
+            }
+        fresh: dict[str, Any] = {"slots": {}} if new_session(state.get("messages", [])) else {}
         return {
+            **fresh,
+            "duplicate": None,
             "human_mode": mode == "human",
             "customer_message_id": str(message.id),
             "voice_failed": False,
@@ -125,6 +152,31 @@ class AgentNodes:
             "started_at": time.time(),
             "trace": [{"node": "ingest", "mode": mode}],
         }
+
+    async def repeated(self, session: AsyncSession, message: Message) -> str | None:
+        recorded = await session.scalar(
+            select(Message.id)
+            .where(
+                Message.conversation_id == message.conversation_id,
+                Message.role == "bot",
+                Message.created_at > message.created_at,
+            )
+            .limit(1)
+        )
+        if recorded:
+            return "done"
+        return "sent" if (message.trace or {}).get("answered") else None
+
+    async def mark_answered(self, state: ChatState) -> None:
+        message_id = state.get("customer_message_id")
+        if not message_id:
+            return
+        async with tenant_session(self.tenant(state)) as session:
+            await session.execute(
+                update(Message)
+                .where(Message.id == uuid.UUID(message_id))
+                .values(trace={"answered": True})
+            )
 
     async def recognize(self, state: ChatState, item: dict[str, Any]) -> dict[str, Any]:
         channels, channel_id = self.deps.channels, state.get("channel_id")
@@ -159,7 +211,13 @@ class AgentNodes:
                 .values(content=heard or None, media={"items": items})
             )
         return {
-            "messages": [HumanMessage(id=last.id, content=heard or VOICE_PLACEHOLDER)],
+            "messages": [
+                HumanMessage(
+                    id=last.id,
+                    content=heard or VOICE_PLACEHOLDER,
+                    additional_kwargs=last.additional_kwargs,
+                )
+            ],
             "voice_failed": failed,
             "trace": step(
                 state,
@@ -499,6 +557,7 @@ class AgentNodes:
             log.warning("agent.send_failed", channel_id=channel_id, error=str(exc))
             trace = step(state, "send", delivered=False, error=str(exc))
             return {"reply": reply, "send_failed": True, "trace": trace}
+        await self.mark_answered(state)
         trace = step(
             state,
             "send",

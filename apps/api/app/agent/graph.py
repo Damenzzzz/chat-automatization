@@ -40,6 +40,10 @@ class Node(Protocol):
 
 
 def after_ingest(state: ChatState) -> str:
+    if state.get("duplicate") == "done":
+        return END
+    if state.get("duplicate") == "sent":
+        return "meter"
     return "transcribe" if state.get("media") else "guard_in"
 
 
@@ -77,7 +81,7 @@ def build_graph(
         g.add_node(name, getattr(nodes, name))
 
     g.add_edge(START, "ingest")
-    g.add_conditional_edges("ingest", after_ingest, ["transcribe", "guard_in"])
+    g.add_conditional_edges("ingest", after_ingest, [END, "meter", "transcribe", "guard_in"])
     g.add_edge("transcribe", "guard_in")
     g.add_conditional_edges("guard_in", after_guard_in, [END, "gate", "understand"])
     g.add_conditional_edges("gate", after_gate, ["send", "understand"])

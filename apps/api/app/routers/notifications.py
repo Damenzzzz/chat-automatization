@@ -58,7 +58,7 @@ async def read_notification(
 
 @router.post("/me/telegram/link")
 async def telegram_link(
-    principal: Owner, db: TenantDb, redis: Annotated[Redis, Depends(get_redis)]
+    principal: Member, db: TenantDb, redis: Annotated[Redis, Depends(get_redis)]
 ) -> TelegramLinkOut:
     bot = await db.scalar(
         select(Channel.name)

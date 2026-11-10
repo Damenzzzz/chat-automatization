@@ -17,6 +17,7 @@ from app.search.types import KbHit, ProductHit, SearchML
 log = structlog.get_logger()
 
 NOTIFY = "notify_manager"
+MAX_QTY = 999
 
 TOOLS = [
     Tool(
@@ -212,7 +213,10 @@ class ToolBox:
             phone = normalize_phone(contact_phone)
         except ValueError:
             return ToolOutcome({"error": "телефон не распознан, попроси номер в формате +7…"})
-        wanted = {sku_norm(str(i.get("sku", ""))): max(1, int(i.get("qty") or 1)) for i in items}
+        wanted = {
+            sku_norm(str(i.get("sku", ""))): min(MAX_QTY, max(1, int(i.get("qty") or 1)))
+            for i in items
+        }
         wanted.pop(None, None)
         if not wanted:
             return ToolOutcome({"error": "в заявке нет товаров"})
@@ -225,6 +229,19 @@ class ToolBox:
             if missing:
                 return ToolOutcome(
                     {"error": f"нет товаров с артикулами: {', '.join(map(str, missing))}"}
+                )
+            short = [
+                f"{p.sku}: в наличии {p.stock}"
+                for code, p in products.items()
+                if p.stock is not None and wanted[code] > p.stock
+            ]
+            if short:
+                return ToolOutcome(
+                    {
+                        "error": "не хватает на складе ("
+                        + "; ".join(short)
+                        + "): предложи доступное количество или передай диалог менеджеру"
+                    }
                 )
             lines: list[dict[str, Any]] = [
                 {"sku": p.sku, "name": p.name, "qty": wanted[code], "price": p.price}

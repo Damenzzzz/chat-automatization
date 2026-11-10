@@ -1,3 +1,4 @@
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Annotated, Any
@@ -53,7 +54,13 @@ class Agent:
             "customer_external_id": customer_external_id,
             "external_id": external_id,
             "media": media or [],
-            "messages": [HumanMessage(text)],
+            "messages": [
+                HumanMessage(
+                    text,
+                    id=f"in:{external_id}" if external_id else None,
+                    additional_kwargs={"at": time.time()},
+                )
+            ],
         }
         state = await self.graph.ainvoke(
             incoming, config={"configurable": {"thread_id": str(conversation_id)}}
