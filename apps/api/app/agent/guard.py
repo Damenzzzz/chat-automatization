@@ -23,6 +23,7 @@ SENTENCE = re.compile(r"[!?\n]+|\.\s+(?=[A-ZА-ЯЁӘҒҚҢӨҰҮҺІ])")
 SKU_LIKE = re.compile(r"(?<![\w-])[A-Za-zА-ЯЁа-яё]{1,5}-?\d{2,}[A-Za-z0-9-]*(?![\w-])")
 MAX_TERMS = 4
 MAX_BASE = 40
+MAX_COUNT = 1000
 
 
 @dataclass
@@ -111,6 +112,9 @@ def check_reply(
         result.errors.append("ответ пустой")
         return result
     allowed = _sums(allowed_base(context, profile, customer_text, slots or {}))
+    prices = {int(i["price"]) for i in context if i.get("type") == "product" and i.get("price")}
+    counts = {n for n in numbers(reply) | numbers(customer_text) if 1 < n < MAX_COUNT}
+    allowed |= {price * count for price in prices for count in counts}
     for amount in amounts(reply):
         result.amounts.append(amount.value)
         if amount.value not in allowed:
