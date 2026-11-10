@@ -12,6 +12,7 @@ type Session = {
   isOwner: boolean;
   error: unknown;
   retry: () => void;
+  refresh: () => void;
 };
 
 const SessionContext = createContext<Session | null>(null);
@@ -38,6 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           void me.mutate();
           void shop.mutate();
         },
+        refresh: () => void shop.mutate(),
       }}
     >
       {children}

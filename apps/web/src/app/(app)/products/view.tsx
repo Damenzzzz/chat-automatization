@@ -1,6 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 
@@ -43,10 +44,21 @@ function Row({ product }: { product: Schemas["CatalogProduct"] }) {
 }
 
 export function ProductsView() {
-  const [input, setInput] = useState("");
-  const [q, setQ] = useState("");
+  const params = useSearchParams();
+  return (
+    <Products
+      key={params.toString()}
+      query={params.get("q") ?? ""}
+      upload={params.get("import") === "1"}
+    />
+  );
+}
+
+function Products({ query, upload }: { query: string; upload: boolean }) {
+  const [input, setInput] = useState(query);
+  const [q, setQ] = useState(query);
   const [offset, setOffset] = useState(0);
-  const [importing, setImporting] = useState(false);
+  const [importing, setImporting] = useState(upload);
 
   useEffect(() => {
     const timer = setTimeout(() => {
