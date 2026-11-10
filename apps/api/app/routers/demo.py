@@ -1,4 +1,3 @@
-import time
 import uuid
 from typing import Annotated
 
@@ -11,7 +10,9 @@ from app.agent.sandbox import sandbox_conversation
 from app.auth.deps import get_refresh_store
 from app.auth.tokens import RefreshStore
 from app.core.config import get_settings
+from app.core.net import client_ip
 from app.core.queue import Queue, get_queue
+from app.core.ratelimit import limit
 from app.core.redis import get_redis
 from app.demo.service import demo_owner, ensure_demo_shop, mentioned_products
 from app.routers.auth import SessionOut, start_session
@@ -60,27 +61,6 @@ def require_demo() -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "demo_disabled")
 
 
-async def limit(redis: Redis, key: str, count: int, window: int) -> None:
-    bucket = f"ratelimit:demo:{key}:{int(time.time() // window)}"
-    pipe = redis.pipeline(transaction=True)
-    pipe.incr(bucket)
-    pipe.expire(bucket, window * 2)
-    hits, _ = await pipe.execute()
-    if hits > count:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            "too_many_requests",
-            headers={"Retry-After": str(window)},
-        )
-
-
-def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 @router.get("")
 async def demo_status() -> DemoStatus:
     return DemoStatus(enabled=get_settings().demo_enabled)
@@ -94,7 +74,7 @@ async def demo_login(
     queue: QueueDep,
     store: Annotated[RefreshStore, Depends(get_refresh_store)],
 ) -> SessionOut:
-    await limit(redis, f"login:{client_ip(request)}", LOGIN_PER_MINUTE, 60)
+    await limit(redis, f"demo:login:{client_ip(request)}", LOGIN_PER_MINUTE, 60)
     await ensure_demo_shop(queue)
     return await start_session(response, await demo_owner(), store)
 
@@ -104,8 +84,9 @@ async def demo_chat(
     body: DemoChatIn, request: Request, redis: RedisDep, queue: QueueDep, agent: AgentDep
 ) -> DemoChatOut:
     ip = client_ip(request)
-    await limit(redis, f"chat:{ip}", CHAT_PER_MINUTE, 60)
-    await limit(redis, f"chat-hour:{ip}", CHAT_PER_HOUR, 3600)
+    await limit(redis, f"demo:chat:{ip}", CHAT_PER_MINUTE, 60)
+    await limit(redis, f"demo:chat-hour:{ip}", CHAT_PER_HOUR, 3600)
+    await limit(redis, "demo:chat-day", get_settings().demo_chat_daily_limit, 86400)
     await ensure_demo_shop(queue)
     conversation_id = await sandbox_conversation(DEMO_TENANT_ID, f"landing-{body.session_id}")
     turn = await agent.run(

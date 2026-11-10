@@ -5,11 +5,11 @@ from redis.asyncio import Redis
 from sqlalchemy import func, select
 
 from app.core.config import get_settings
+from app.core.ratelimit import limit
 from app.db.session import tenant_session
 from app.demo.activity import DEMO_PREFIX
 from app.mlclient import get_ml_client
 from app.models import Conversation, Customer, Lead
-from app.routers.demo import limit
 from app.seed import DEMO_TENANT_ID
 from tests.conftest import RecordingQueue, random_phone
 from tests.fake_ml import FakeML
@@ -120,3 +120,16 @@ async def test_request_code_hides_code_in_prod(
     response = await client.post("/auth/request-code", json={"phone": random_phone()})
     assert response.status_code == 202
     assert response.json().get("demo_code") is None
+
+
+@pytest.mark.usefixtures("demo_on")
+async def test_demo_owner_cannot_change_shop(client: AsyncClient, queue: RecordingQueue) -> None:
+    await client.post("/demo/login")
+
+    for method, path in [("PUT", "/bot-profile"), ("PATCH", "/shop"), ("POST", "/team/invite")]:
+        response = await client.request(method, path, json={})
+        assert response.status_code == 403
+        assert response.json()["detail"] == "demo_read_only"
+
+    chat = await client.post("/sandbox/chat", json={"message": "привет", "session_id": "demo-1"})
+    assert chat.status_code == 200

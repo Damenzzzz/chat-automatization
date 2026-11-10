@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
@@ -16,8 +17,13 @@ from app.core.config import get_settings
 from app.core.redis import get_redis
 from app.db.session import tenant_session
 from app.models import AuditLog
+from app.seed import DEMO_TENANT_ID
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+DEMO_WRITABLE = re.compile(
+    r"^/(sandbox/chat|conversations/[^/]+/(takeover|release|reply|draft)"
+    r"|leads/[^/]+|notifications/[^/]+/read)$"
+)
 
 
 def get_otp() -> OtpService:
@@ -46,7 +52,18 @@ def _unauthorized() -> HTTPException:
     return HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
 
 
+def demo_read_only(principal: Principal, request: Request) -> bool:
+    return (
+        principal.tenant_id == DEMO_TENANT_ID
+        and principal.actor_id is None
+        and get_settings().demo_enabled
+        and request.method not in SAFE_METHODS
+        and not DEMO_WRITABLE.match(request.url.path)
+    )
+
+
 async def current_user(
+    request: Request,
     token: Annotated[str | None, Cookie(alias=ACCESS_COOKIE)] = None,
 ) -> Principal:
     if not token:
@@ -63,7 +80,10 @@ async def current_user(
         if user.role != "admin":
             raise _unauthorized()
         return Principal(user.id, user.tenant_id, claims.impersonating, "owner", actor_id=user.id)
-    return Principal(user.id, user.tenant_id, user.tenant_id, user.role)
+    principal = Principal(user.id, user.tenant_id, user.tenant_id, user.role)
+    if demo_read_only(principal, request):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "demo_read_only")
+    return principal
 
 
 CurrentUser = Annotated[Principal, Depends(current_user)]

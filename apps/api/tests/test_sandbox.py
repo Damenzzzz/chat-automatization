@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.agent.sandbox import AutotestPlan, AutotestQuestion, Verdict
 from app.agent.understand import Understanding
+from app.core.config import get_settings
 from app.llm import LLMResponse, Message, Tool, Usage, get_llm
 from app.llm.fake import FakeLLM
 from app.mlclient import get_ml_client
@@ -139,3 +140,13 @@ async def test_autotest_judges_answers(
 
 async def test_autotest_needs_llm(client: AsyncClient, shop_owner: uuid.UUID) -> None:
     assert (await client.post("/sandbox/autotest")).status_code == 503
+
+
+async def test_sandbox_chat_is_limited_per_shop(
+    client: AsyncClient, shop_owner: uuid.UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "sandbox_messages_per_hour", 1)
+    body = {"message": "привет", "session_id": "limit"}
+
+    assert (await client.post("/sandbox/chat", json=body)).status_code == 200
+    assert (await client.post("/sandbox/chat", json=body)).status_code == 429

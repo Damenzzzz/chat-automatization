@@ -13,6 +13,9 @@ from app.channels.registry import get_adapters
 from app.channels.store import load_channel_by_key
 from app.channels.types import ChannelAdapter, ChannelConfig
 from app.channels.web import customer_id, origin_allowed, stream_key
+from app.core.config import get_settings
+from app.core.net import client_ip
+from app.core.ratelimit import limit
 from app.core.redis import get_redis
 from app.routers.webhooks import GatewayDep
 
@@ -62,18 +65,8 @@ def client_session(session: str | None, origin: str) -> str:
     return session
 
 
-async def enforce_limit(redis: Any, key: str, limit: int, origin: str) -> None:
-    bucket = f"ratelimit:{key}:{int(time.time() // 60)}"
-    pipe = redis.pipeline(transaction=True)
-    pipe.incr(bucket)
-    pipe.expire(bucket, 120)
-    count, _ = await pipe.execute()
-    if count > limit:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            "too_many_requests",
-            headers={**cors_headers(origin), "Retry-After": "60"},
-        )
+async def enforce_limit(redis: Any, key: str, count: int, origin: str, window: int = 60) -> None:
+    await limit(redis, key, count, window, cors_headers(origin))
 
 
 @router.options("/{public_key}/{path}", include_in_schema=False)
@@ -101,8 +94,10 @@ async def post_message(
 ) -> JSONResponse:
     origin = origin or ""
     token = client_session(session, origin)
-    client = request.client.host if request.client else "unknown"
+    client = client_ip(request)
     await enforce_limit(redis, f"widget-ip:{channel.id}:{client}", IP_PER_MINUTE, origin)
+    per_hour = get_settings().widget_channel_messages_per_hour
+    await enforce_limit(redis, f"widget-channel:{channel.id}", per_hour, origin, 3600)
     await enforce_limit(redis, f"widget-session:{customer_id(token)}", SESSION_PER_MINUTE, origin)
     try:
         body = WidgetMessageIn.model_validate_json(await read_body(request, MAX_BODY))
@@ -148,7 +143,7 @@ async def stream(
 ) -> StreamingResponse:
     origin = origin or ""
     token = client_session(session, origin)
-    client = request.client.host if request.client else "unknown"
+    client = client_ip(request)
     await enforce_limit(redis, f"widget-stream:{channel.id}:{client}", IP_PER_MINUTE, origin)
     start = last_event_id if last_event_id and EVENT_ID.match(last_event_id) else "0"
     return StreamingResponse(
