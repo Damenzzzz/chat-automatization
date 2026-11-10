@@ -1,5 +1,4 @@
 import uuid
-from datetime import timedelta
 
 from redis.asyncio import Redis
 from sqlalchemy import text
@@ -27,10 +26,13 @@ async def test_idle_human_dialog_returns_to_bot(owner_engine: AsyncEngine) -> No
     tenant_id, idle = await make_conversation(owner_engine, mode="human")
     _, fresh = await make_conversation(owner_engine, tenant_id, mode="human")
     async with owner_engine.begin() as conn:
-        for conversation_id, age in ((idle, timedelta(hours=13)), (fresh, timedelta(minutes=1))):
+        for conversation_id, minutes in ((idle, 13 * 60), (fresh, 1)):
             await conn.execute(
-                text("UPDATE conversations SET last_message_at = now() - :age WHERE id = :c"),
-                {"c": conversation_id, "age": age},
+                text(
+                    "UPDATE conversations SET last_message_at = now() - make_interval(mins => :m)"
+                    " WHERE id = :c"
+                ),
+                {"c": conversation_id, "m": minutes},
             )
 
     assert await release_idle_conversations(12) == 1
