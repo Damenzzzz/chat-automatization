@@ -39,6 +39,7 @@ class Customer(IdMixin, TimestampMixin, TenantMixin, Base):
     name: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(32))
     lang: Mapped[str | None] = mapped_column(String(8))
+    note: Mapped[str | None] = mapped_column(Text)
 
 
 class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):

@@ -35,7 +35,7 @@ from app.core.queue import Queue
 from app.db.session import tenant_session
 from app.llm import LLM, LLMError, ToolCall
 from app.mlclient import MLError, Transcript
-from app.models import Conversation, Message, Product, Unanswered
+from app.models import Conversation, Message, Product, Tenant, Unanswered
 from app.search.lang import detect_lang
 from app.search.types import SearchML
 
@@ -98,6 +98,11 @@ class AgentNodes:
             mode = await session.scalar(
                 select(Conversation.mode).where(Conversation.id == conversation_id)
             )
+            shop_paused = not state.get("sandbox") and bool(
+                await session.scalar(
+                    select(Tenant.bot_paused).where(Tenant.id == self.tenant(state))
+                )
+            )
             message = None
             if external_id:
                 message = await session.scalar(
@@ -138,7 +143,7 @@ class AgentNodes:
         return {
             **fresh,
             "duplicate": None,
-            "human_mode": mode == "human",
+            "human_mode": mode == "human" or shop_paused,
             "customer_message_id": str(message.id),
             "voice_failed": False,
             "send_failed": False,
@@ -152,7 +157,7 @@ class AgentNodes:
             "reply": None,
             "flagged": False,
             "started_at": time.time(),
-            "trace": [{"node": "ingest", "mode": mode}],
+            "trace": [{"node": "ingest", "mode": mode, "shop_paused": shop_paused}],
         }
 
     async def repeated(self, session: AsyncSession, message: Message) -> str | None:

@@ -21,6 +21,11 @@ class ShopLinks(BaseModel):
     kaspi: str | None = Field(default=None, max_length=300)
 
 
+class ReplyTemplate(BaseModel):
+    title: str = Field(min_length=1, max_length=60)
+    text: str = Field(min_length=1, max_length=1000)
+
+
 class ShopOut(BaseModel):
     id: uuid.UUID
     name: str
@@ -29,6 +34,8 @@ class ShopOut(BaseModel):
     status: str
     links: ShopLinks
     onboarding_step: int
+    bot_paused: bool
+    reply_templates: list[ReplyTemplate]
 
 
 class ShopIn(BaseModel):
@@ -38,6 +45,8 @@ class ShopIn(BaseModel):
     links: ShopLinks | None = None
     onboarding_step: int | None = Field(default=None, ge=1, le=ONBOARDING_STEPS)
     onboarding_done: bool | None = None
+    bot_paused: bool | None = None
+    reply_templates: list[ReplyTemplate] | None = Field(default=None, max_length=20)
 
 
 def shop_out(tenant: Tenant) -> ShopOut:
@@ -49,6 +58,8 @@ def shop_out(tenant: Tenant) -> ShopOut:
         status=tenant.status,
         links=ShopLinks(**tenant.links),
         onboarding_step=tenant.onboarding_step,
+        bot_paused=tenant.bot_paused,
+        reply_templates=[ReplyTemplate(**item) for item in tenant.reply_templates],
     )
 
 
@@ -69,7 +80,7 @@ async def update_shop(body: ShopIn, principal: Owner, db: TenantDb) -> ShopOut:
     for name, value in body.model_dump(
         exclude_unset=True, exclude={"links", "onboarding_done"}
     ).items():
-        if name == "name" and value is None:
+        if name in ("name", "bot_paused", "reply_templates") and value is None:
             continue
         setattr(tenant, name, value)
     if body.links is not None:

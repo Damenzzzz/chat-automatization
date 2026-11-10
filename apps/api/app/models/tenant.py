@@ -34,6 +34,8 @@ class Tenant(IdMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), server_default="onboarding")
     links: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     onboarding_step: Mapped[int] = mapped_column(Integer, server_default="1")
+    bot_paused: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    reply_templates: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
 
 
 class User(IdMixin, TimestampMixin, TenantMixin, Base):
