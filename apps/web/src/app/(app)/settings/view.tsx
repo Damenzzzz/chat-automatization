@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from "swr";
 
 import { useSession } from "@/components/shell/session";
 import { BusinessForm } from "@/components/shop/business-form";
+import { TemplatesForm } from "@/components/shop/templates-form";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/field";
 import { FormError, LoadError, Loading, Page, PageHeader, Section } from "@/components/ui/page";
@@ -185,7 +186,7 @@ export function SettingsView() {
   const { mutate } = useSWRConfig();
   return (
     <Page>
-      <PageHeader title="Настройки">Данные магазина, команда и уведомления.</PageHeader>
+      <PageHeader title="Настройки">Данные магазина, шаблоны, команда и уведомления.</PageHeader>
       <Section title="Магазин">
         {shop ? (
           <BusinessForm
@@ -199,12 +200,26 @@ export function SettingsView() {
           <Loading />
         )}
       </Section>
+      <Section
+        title="Шаблоны ответов"
+        description="Готовые ответы появятся кнопками под полем сообщения в диалогах."
+      >
+        {shop ? (
+          <TemplatesForm
+            key={shop.id}
+            templates={shop.reply_templates}
+            onDone={(saved) => void mutate("/shop", saved, { revalidate: false })}
+          />
+        ) : (
+          <Loading />
+        )}
+      </Section>
       <Section title="Команда">
         <Team />
       </Section>
       <Section
-        title="Уведомления о балансе"
-        description="Напишем в Telegram, когда на балансе останется мало денег."
+        title="Уведомления в Telegram"
+        description="Напишем, когда покупатель ждёт менеджера, пришла заявка или на балансе мало денег."
       >
         <TelegramNotifications />
       </Section>
