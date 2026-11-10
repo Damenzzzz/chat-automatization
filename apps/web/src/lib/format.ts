@@ -43,3 +43,13 @@ export function plural(value: number, one: string, few: string, many: string): s
   if (units >= 2 && units <= 4) return few;
   return many;
 }
+
+export function waitedFor(value: string | null | undefined, now = Date.now()): string {
+  if (!value) return "";
+  const minutes = Math.max(0, Math.floor((now - new Date(value).getTime()) / 60_000));
+  if (minutes < 1) return "только что";
+  if (minutes < 60) return `${minutes} мин`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ч`;
+  return `${Math.floor(hours / 24)} дн`;
+}

@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ready */
+        get: operations["ready_ready_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/request-code": {
         parameters: {
             query?: never;
@@ -788,6 +805,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversation_id}/customer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Customer */
+        patch: operations["update_customer_conversations__conversation_id__customer_patch"];
+        trace?: never;
+    };
+    "/conversations/{conversation_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft */
+        post: operations["draft_conversations__conversation_id__draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leads": {
         parameters: {
             query?: never;
@@ -1216,6 +1267,7 @@ export interface components {
             messages: components["schemas"]["MessageOut"][];
             /** Leads */
             leads: components["schemas"]["LeadOut"][];
+            customer: components["schemas"]["CustomerOut"];
         };
         /** ConversationList */
         ConversationList: {
@@ -1269,6 +1321,38 @@ export interface components {
             leads: number;
             /** Waiting */
             waiting: number;
+        };
+        /** CustomerIn */
+        CustomerIn: {
+            /** Note */
+            note?: string | null;
+        };
+        /** CustomerOut */
+        CustomerOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string | null;
+            /** Phone */
+            phone: string | null;
+            /** Channel */
+            channel: string;
+            /** Lang */
+            lang: string | null;
+            /** Note */
+            note: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /** Dialogs */
+            dialogs: number;
+            /** Leads */
+            leads: components["schemas"]["LeadBrief"][];
         };
         /** DayOut */
         DayOut: {
@@ -1348,6 +1432,13 @@ export interface components {
              * @default Цветы Пион
              */
             shop_name: string;
+        };
+        /** DraftOut */
+        DraftOut: {
+            /** Text */
+            text: string;
+            /** Verified */
+            verified: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1447,6 +1538,23 @@ export interface components {
             rrf: number;
             /** Score */
             score: number | null;
+        };
+        /** LeadBrief */
+        LeadBrief: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Total Kzt */
+            total_kzt: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** LeadList */
         LeadList: {
@@ -1647,6 +1755,12 @@ export interface components {
             leads_total_kzt: number;
             /** Avg Response Ms */
             avg_response_ms: number | null;
+            /** Spent Kzt */
+            spent_kzt: number;
+            /** Found Dialogs */
+            found_dialogs: number;
+            /** Leads Done */
+            leads_done: number;
         };
         /** ModelPriceIn */
         "ModelPriceIn-Input": {
@@ -1806,6 +1920,13 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** ReplyTemplate */
+        ReplyTemplate: {
+            /** Title */
+            title: string;
+            /** Text */
+            text: string;
+        };
         /** RollbackIn */
         RollbackIn: {
             /** Version */
@@ -1853,6 +1974,10 @@ export interface components {
             onboarding_step?: number | null;
             /** Onboarding Done */
             onboarding_done?: boolean | null;
+            /** Bot Paused */
+            bot_paused?: boolean | null;
+            /** Reply Templates */
+            reply_templates?: components["schemas"]["ReplyTemplate"][] | null;
         };
         /** ShopLinks */
         ShopLinks: {
@@ -1883,6 +2008,10 @@ export interface components {
             links: components["schemas"]["ShopLinks"];
             /** Onboarding Step */
             onboarding_step: number;
+            /** Bot Paused */
+            bot_paused: boolean;
+            /** Reply Templates */
+            reply_templates: components["schemas"]["ReplyTemplate"][];
         };
         /** SignupIn */
         SignupIn: {
@@ -2064,6 +2193,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    ready_ready_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -3449,6 +3598,7 @@ export interface operations {
                 filter?: "all" | "bot" | "human" | "leads";
                 limit?: number;
                 before?: string | null;
+                q?: string | null;
             };
             header?: never;
             path?: never;
@@ -3632,6 +3782,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_customer_conversations__conversation_id__customer_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_conversations__conversation_id__draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftOut"];
                 };
             };
             /** @description Validation Error */
