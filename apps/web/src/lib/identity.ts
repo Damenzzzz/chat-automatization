@@ -12,5 +12,6 @@ export function parseIdentity(raw: string): Identity | null {
 }
 
 export function safeNext(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/overview";
+  const local = next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\");
+  return local ? next : "/overview";
 }
