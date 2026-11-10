@@ -71,6 +71,7 @@ class LedgerEntry(IdMixin, TimestampMixin, Base):
         CheckConstraint("type IN ('topup', 'charge', 'refund')", name="type"),
         CheckConstraint("type <> 'charge' OR amount_kzt <= 0", name="charge_sign"),
         CheckConstraint("type <> 'topup' OR amount_kzt > 0", name="topup_sign"),
+        Index("ix_ledger_tenant_id_type_created_at", "tenant_id", "type", "created_at"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

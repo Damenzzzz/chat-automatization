@@ -48,6 +48,7 @@ class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):
         CheckConstraint("status IN ('open', 'closed')", name="status"),
         CheckConstraint("paused_reason IN ('no_balance', 'rate_limit')", name="paused_reason"),
         Index("ix_conversations_tenant_id_last_message_at", "tenant_id", "last_message_at"),
+        Index("ix_conversations_tenant_id_updated_at", "tenant_id", "updated_at"),
         Index(
             "uq_conversations_open",
             "tenant_id",
@@ -76,6 +77,7 @@ class Message(IdMixin, TimestampMixin, TenantMixin, Base):
     __table_args__ = (
         CheckConstraint("role IN ('customer', 'bot', 'manager', 'system')", name="role"),
         Index("ix_messages_conversation_id_created_at", "conversation_id", "created_at"),
+        Index("ix_messages_tenant_id_created_at", "tenant_id", "created_at"),
     )
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(
@@ -99,6 +101,8 @@ class Lead(IdMixin, TimestampMixin, TenantMixin, Base):
     __table_args__ = (
         CheckConstraint("status IN ('new', 'in_progress', 'done', 'cancelled')", name="status"),
         CheckConstraint("total_kzt >= 0", name="total_kzt"),
+        Index("ix_leads_tenant_id_created_at", "tenant_id", "created_at"),
+        Index("ix_leads_tenant_id_updated_at", "tenant_id", "updated_at"),
     )
 
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(

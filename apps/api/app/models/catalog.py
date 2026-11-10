@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 EMBEDDING_DIM = 1024
+STALE = "embedding_stale OR embedding IS NULL"
 
 PRODUCT_TSV = (
     "setweight(to_tsvector('russian', coalesce(name, '')), 'A') || "
@@ -103,6 +104,11 @@ class Product(IdMixin, TimestampMixin, TenantMixin, Base):
             postgresql_ops={"name": "gin_trgm_ops"},
         ),
         Index(
+            "ix_products_stale",
+            "tenant_id",
+            postgresql_where=sql_text(STALE),
+        ),
+        Index(
             "ix_products_embedding",
             "embedding",
             postgresql_using="hnsw",
@@ -137,6 +143,11 @@ class KbChunk(IdMixin, TimestampMixin, TenantMixin, Base):
     __tablename__ = "kb_chunks"
     __table_args__ = (
         Index("ix_kb_chunks_tsv", "tsv", postgresql_using="gin"),
+        Index(
+            "ix_kb_chunks_stale",
+            "tenant_id",
+            postgresql_where=sql_text(STALE),
+        ),
         Index(
             "ix_kb_chunks_embedding",
             "embedding",
