@@ -10,16 +10,22 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import case, func, select, true, update
+from redis.asyncio import Redis
+from sqlalchemy import case, func, or_, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
+from app.agent.draft import NothingToAnswerError, draft_reply
 from app.agent.runtime import Agent, get_agent
 from app.auth.deps import CurrentUser, Principal, TenantDb, require_role
 from app.channels.outbound import Outbound
 from app.channels.registry import get_adapters
 from app.channels.types import ChannelError, OutgoingMessage
+from app.core.ratelimit import limit
+from app.core.redis import get_redis
 from app.db.session import tenant_session
+from app.llm import LLM, LLMError, get_llm
+from app.mlclient import MLClient, get_ml_client
 from app.models import Channel, Conversation, Customer, Lead, Message, Product
 from app.routers.leads import LeadOut, lead_out
 
@@ -29,6 +35,8 @@ log = structlog.get_logger()
 Member = Annotated[Principal, Depends(require_role("owner", "manager"))]
 Filter = Literal["all", "bot", "human", "leads"]
 MAX_MESSAGES = 200
+CUSTOMER_LEADS = 5
+DRAFTS_PER_HOUR = 60
 POLL_SECONDS = 1.5
 STREAM_SECONDS = 300
 PING_SECONDS = 15
@@ -92,9 +100,38 @@ class MessageOut(BaseModel):
     cards: list[CardOut]
 
 
+class LeadBrief(BaseModel):
+    id: uuid.UUID
+    status: str
+    total_kzt: int | None
+    created_at: datetime
+
+
+class CustomerOut(BaseModel):
+    id: uuid.UUID
+    name: str | None
+    phone: str | None
+    channel: str
+    lang: str | None
+    note: str | None
+    first_seen_at: datetime
+    dialogs: int
+    leads: list[LeadBrief]
+
+
 class ConversationDetail(ConversationRow):
     messages: list[MessageOut]
     leads: list[LeadOut]
+    customer: CustomerOut
+
+
+class CustomerIn(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class DraftOut(BaseModel):
+    text: str
+    verified: bool
 
 
 class ReplyIn(BaseModel):
@@ -183,6 +220,20 @@ async def conversation_counts(db: AsyncSession) -> Counts:
     return Counts(all=row[0], bot=row[1], human=row[2], leads=row[3], waiting=row[4])
 
 
+def matches(q: str) -> Any:
+    like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    digits = "".join(ch for ch in q if ch.isdigit())
+    found = [
+        Customer.name.ilike(like),
+        select(Message.id)
+        .where(Message.conversation_id == Conversation.id, Message.content.ilike(like))
+        .exists(),
+    ]
+    if len(digits) >= 3:
+        found.append(Customer.phone.like(f"%{digits}%"))
+    return or_(*found)
+
+
 @router.get("")
 async def list_conversations(
     principal: Member,
@@ -190,8 +241,11 @@ async def list_conversations(
     filter_: Annotated[Filter, Query(alias="filter")] = "all",
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     before: datetime | None = None,
+    q: Annotated[str | None, Query(max_length=100)] = None,
 ) -> ConversationList:
     query = row_query().where(Conversation.last_message_at.is_not(None))
+    if q and q.strip():
+        query = query.where(matches(q.strip()))
     if filter_ in ("bot", "human"):
         query = query.where(Conversation.mode == filter_)
     elif filter_ == "leads":
@@ -328,6 +382,36 @@ async def detail(db: AsyncSession, conversation_id: uuid.UUID) -> ConversationDe
         **row_values(row),
         messages=[message_out(m, products) for m in messages],
         leads=[lead_out(lead) for lead in leads],
+        customer=await customer_out(db, row[0].customer_id),
+    )
+
+
+async def customer_out(db: AsyncSession, customer_id: uuid.UUID) -> CustomerOut:
+    customer = await db.get(Customer, customer_id)
+    assert customer is not None  # noqa: S101
+    own = select(Conversation.id).where(
+        Conversation.customer_id == customer_id, Conversation.sandbox.is_(False)
+    )
+    dialogs = await db.scalar(select(func.count()).select_from(own.subquery()))
+    leads = await db.scalars(
+        select(Lead)
+        .where(Lead.conversation_id.in_(own))
+        .order_by(Lead.created_at.desc())
+        .limit(CUSTOMER_LEADS)
+    )
+    return CustomerOut(
+        id=customer.id,
+        name=customer.name,
+        phone=customer.phone,
+        channel=customer.channel,
+        lang=customer.lang,
+        note=customer.note,
+        first_seen_at=customer.created_at,
+        dialogs=int(dialogs or 0),
+        leads=[
+            LeadBrief(id=x.id, status=x.status, total_kzt=x.total_kzt, created_at=x.created_at)
+            for x in leads
+        ],
     )
 
 
@@ -403,3 +487,37 @@ async def reply(
     if step["delivered"]:
         await agent.remember_manager_reply(conversation_id, text)
     return message_out(message, {})
+
+
+@router.patch("/{conversation_id}/customer")
+async def update_customer(
+    conversation_id: uuid.UUID, body: CustomerIn, principal: Member, db: TenantDb
+) -> CustomerOut:
+    row = await load_row(db, conversation_id)
+    customer = await db.get(Customer, row[0].customer_id)
+    assert customer is not None  # noqa: S101
+    customer.note = (body.note or "").strip() or None
+    await db.flush()
+    return await customer_out(db, customer.id)
+
+
+@router.post("/{conversation_id}/draft")
+async def draft(
+    conversation_id: uuid.UUID,
+    principal: Member,
+    db: TenantDb,
+    redis: Annotated[Redis, Depends(get_redis)],
+    llm: Annotated[LLM | None, Depends(get_llm)],
+    ml: Annotated[MLClient, Depends(get_ml_client)],
+) -> DraftOut:
+    await load_row(db, conversation_id)
+    if llm is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "llm_unavailable")
+    await limit(redis, f"draft:{principal.tenant_id}", DRAFTS_PER_HOUR, 3600)
+    try:
+        result = await draft_reply(db, principal.tenant_id, conversation_id, llm, ml)
+    except NothingToAnswerError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "nothing_to_answer") from exc
+    except LLMError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "llm_failed") from exc
+    return DraftOut(text=result.text, verified=result.verified)
