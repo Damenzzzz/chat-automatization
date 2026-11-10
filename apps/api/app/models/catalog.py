@@ -128,7 +128,7 @@ class Product(IdMixin, TimestampMixin, TenantMixin, Base):
     images: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=sql_text("'{}'"))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=sql_text("true"))
     content_hash: Mapped[str | None] = mapped_column(String(64))
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), deferred=True)
     embedding_stale: Mapped[bool] = mapped_column(Boolean, server_default=sql_text("true"))
     tsv: Mapped[str] = mapped_column(TSVECTOR, Computed(PRODUCT_TSV, persisted=True))
 
@@ -150,7 +150,7 @@ class KbChunk(IdMixin, TimestampMixin, TenantMixin, Base):
     text: Mapped[str] = mapped_column(Text)
     position: Mapped[int] = mapped_column(Integer, server_default="0")
     content_hash: Mapped[str | None] = mapped_column(String(64))
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), deferred=True)
     embedding_stale: Mapped[bool] = mapped_column(Boolean, server_default=sql_text("true"))
     tsv: Mapped[str] = mapped_column(
         TSVECTOR,
