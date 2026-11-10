@@ -56,6 +56,8 @@ make down
 - Access JWT (15 мин) и refresh (30 дней, ротация, хранится хешем в Redis) — httpOnly cookie. `POST /auth/refresh`, `POST /auth/logout`.
 - В эндпоинтах: `CurrentUser`, `require_role(...)`, `TenantDb` из `app/auth/deps.py`. `TenantDb` уже выставил `app.tenant_id` — отдельно `tenant_session` в роутерах не нужен.
 - Поиск пользователя до входа — только через SQL-функцию `auth_find_user` (SECURITY DEFINER), RLS не обходить иначе.
+- `ENV` обязателен (`dev` | `test` | `prod`); при `prod` сервис не стартует с `JWT_SECRET` из `.env.example`. `/docs` в проде выключен, готовность — `GET /ready`. Решения — [ADR 0009](docs/adr/0009-safe-defaults.md).
+- IP клиента для лимитов — только `client_ip` из `app/core/net.py`, лимиты — `limit` из `app/core/ratelimit.py`. `X-Forwarded-For` напрямую не читать.
 - Админ Satushy живёт во внутреннем магазине `SATUSHY_TENANT_ID` (`app/cli.py`). `POST /admin/impersonate/{tenant_id}` → права владельца клиента; старт, стоп и каждый не-GET запрос пишутся в `audit_log` с `actor_id`.
 
 ## LLM
@@ -99,17 +101,25 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - `meter`: сообщение покупателя пишет `ingest`, ответ бота — `meter` (model, суммы tokens_in/out/cached, cost_usd, latency_ms хода, `trace = {steps, llm_calls}`). Не нашли ни товаров, ни базы знаний или сработал fallback → `unanswered`.
 - Песочница: `POST /sandbox/chat {message, session_id}` (тот же граф, `conversations.sandbox = true`, без уведомлений и журнала поиска), `POST /sandbox/autotest {count}` — вопросы по каталогу и базе знаний, прогон, судья `LLM_MODEL_REPLY`.
 - Профиль бота: `GET/PUT /bot-profile`, `GET /bot-profile/versions`, `POST /bot-profile/rollback {version?}`. Каждое сохранение и откат — новая версия, активна ровно одна.
+- Повтор хода ([ADR 0010](docs/adr/0010-turn-idempotency.md)): сообщение покупателя ищется по `external_id`, `send` ставит на нём `trace.answered`; при повторе `ingest` возвращает `duplicate` (`done` → конец, `sent` → сразу `meter`). Второй ответ и второе списание не появляются.
+- Сессия диалога — 6 часов тишины (`app/agent/session.py`): длина диалога для выбора модели считается внутри сессии, слоты в новой сессии сбрасываются.
+- `tenants.bot_paused` (кабинет, `PATCH /shop`): сообщение сохраняется, бот молчит, режим диалога не меняется; песочница работает.
+- `create_lead` не создаёт заявку на количество больше известного остатка; `guard_out` пропускает «цена × количество», если количество есть в ответе или в сообщении покупателя.
+- Черновик ответа менеджеру — `app/agent/draft.py` (`POST /conversations/{id}/draft`): тот же профиль и поиск, ничего не сохраняет и не списывает, `verified` — результат `check_reply`.
 - В тестах — `FakeLLM` (сценарий по порядку вызовов) и `tests/agent_helpers.py` (`make_conversation`, `make_agent`).
 
 ## Каналы
 
 - `app/channels`: `IncomingMessage` / `OutgoingMessage` (текст, карточки, кнопки), адаптеры с интерфейсом `ChannelAdapter` (`parse`, `send`, `download`, `acknowledge`, `check`), реестр — `registry.py`. Решения — [ADR 0005](docs/adr/0005-channel-gateway.md).
 - Путь сообщения: вебхук проверяет подпись → `Gateway.accept` (SETNX `dedup:*` на 24 часа, буфер, задача ARQ `flush_customer` через 1,5 с) → `Processor.flush` (последний `seq`, блокировка диалога, склейка) → граф. В режиме human сообщение сохраняется и уходит `notify_manager`.
+- `notify_manager` → `app/channels/staff.py`: Telegram всем активным сотрудникам с привязанным чатом (заявка, передача диалога, сбой хода, ожидающий покупатель — не чаще раза в 10 минут на диалог). После трёх неудач `Processor.give_up` отвечает покупателю шаблоном и переводит диалог менеджеру.
+- Cron `release_idle` (раз в 10 минут): диалог у менеджера без сообщений `HUMAN_IDLE_RELEASE_HOURS` часов возвращается боту, пауза `rate_limit` снимается через час (SQL-функция `release_idle_conversations`).
+- Узел `gate` показывает покупателю «печатает» (`Outbound.typing`, пока только Telegram). HTTP-клиенты каналов и ML общие на процесс.
 - Текст покупателя не класть в аргументы ARQ и логи. Токены не писать в ошибки: `ChannelHttp` убирает URL, логи httpx выключены (в URL Telegram лежит токен).
 - Карточки: только товары, упомянутые в ответе (до 3); цена и фото читаются из БД в узле `send`. Ошибка отправки не роняет ход: `delivered = false` и `error` в trace.
 - Подключение (только owner): `POST /channels/telegram {token}` (getMe + setWebhook с `secret_token`), `POST /channels/whatsapp`, `POST /channels/web {domain}` (выдаёт `snippet`), `POST /channels/{id}/check`, `GET /channels`.
 - Вебхуки: `/webhooks/telegram/{id}` (заголовок `X-Telegram-Bot-Api-Secret-Token`), `/webhooks/whatsapp/{id}` (GET — `hub.verify_token`, POST — `X-Hub-Signature-256` по `app_secret`).
-- Виджет: `POST /widget/{key}/messages`, `GET /widget/{key}/stream` (SSE на Redis Streams), заголовок `X-Widget-Session`; CORS только для `channels.domain` и его `www`. Лимиты: 20 в минуту на сессию, 60 на IP. Скрипт — `apps/web/public/widget.js`.
+- Виджет: `POST /widget/{key}/messages`, `GET /widget/{key}/stream` (SSE на Redis Streams), заголовок `X-Widget-Session`; CORS только для `channels.domain` и его `www`. Лимиты: 20 в минуту на сессию, 60 на IP, `WIDGET_CHANNEL_MESSAGES_PER_HOUR` на канал. Скрипт — `apps/web/public/widget.js`.
 - Голос: узел `transcribe` скачивает аудио через адаптер, шлёт в ML, кладёт расшифровку в `messages.content` и `messages.media.items[]`. Не распознали → `voice_failed`, бот просит написать текстом. В `apps/ml` базовая модель определяет язык, `kk` уходит в `KK_ASR_MODEL`; модель в формате Transformers при старте конвертируется в CTranslate2 (`/models/ct2`). `av<18`: faster-whisper 1.2 несовместим с новее. `ML_ASR=fake` — без моделей.
 - Env: `FERNET_KEY` обязателен для ключей каналов (иначе 503 `encryption_not_configured`), `PUBLIC_API_URL` должен быть HTTPS для Telegram (локально — адрес туннеля), `WHATSAPP_GRAPH_VERSION`.
 - Instagram — только заглушка адаптера, подключим после App Review.
@@ -138,7 +148,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 
 Смысл оформления и токены — [docs/design-tokens.md](docs/design-tokens.md). Решения — [ADR 0007](docs/adr/0007-cabinet-api-access.md).
 
-- Страницы: `/` (лендинг с живым чатом демо-бота, `components/landing`), `/login`, `/signup`, `/setup?step=1..5`, `/overview`, `/dialogs?id=&filter=`, `/leads`, `/products`, `/bot`, `/channels`, `/balance`, `/settings`. `page.tsx` — серверный (metadata), `view.tsx` — клиентский.
+- Страницы: `/` (лендинг с живым чатом демо-бота, `components/landing`), `/login`, `/signup`, `/setup?step=1..5`, `/overview` (экран «Сегодня»: очередь `components/overview/queue.tsx`, деньги и воронка), `/dialogs?id=&filter=`, `/leads`, `/products`, `/bot`, `/channels`, `/balance`, `/settings`. `page.tsx` — серверный (metadata), `view.tsx` — клиентский.
 - Оформление: небо `sky` — действие и бот, солнце `sun` — «нужен человек», `ink` — текст и меню; разделы — белые `panel` на `canvas`; заголовки Geologica, текст Golos Text. Белый текст на `sky` не ставить.
 - `useSession()` отдаёт `me`/`shop` только после гидратации, иначе серверная и клиентская разметка расходятся.
 - Prettier сортирует классы по `globals.css`: новую утилиту коммитить вместе с файлами, которые её используют, или раньше них.
@@ -146,6 +156,9 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Клиент: `api` из `lib/api/client.ts` (openapi-fetch, при 401 один раз обновляет сессию) и `unwrap` + SWR. Ключ SWR — строка с путём: `InboxStream` по SSE сбрасывает всё, что начинается с `/conversations` и `/leads`.
 - Новый код ошибки API — текст в `lib/api/errors.ts`. Схема поменялась — `make api-types` и коммит `schema.d.ts`.
 - API кабинета: `GET /conversations`, `/conversations/{id}`, `/conversations/stream` (SSE), `POST /conversations/{id}/takeover|release|reply`, `GET/PATCH /leads`, `GET /products`, `GET/PATCH /shop`. Стоимость модели наружу не отдаём: у сообщения только `steps`, без `llm_calls` и `cost_usd`.
+- Диалоги: `GET /conversations?q=` (имя, телефон, текст), в `ConversationDetail` — `customer` (история заявок, заметка `PATCH /conversations/{id}/customer`), ответ менеджера сам переводит диалог в режим human, шаблоны ответов — `shop.reply_templates` (настройки). `GET /analytics/overview` отдаёт `spent_kzt`, `found_dialogs`, `leads_done`.
+- Оболочка (`components/shell`): пауза бота, счётчики ожидающих и новых заявок, нижняя панель на телефоне, счётчик в заголовке вкладки, палитра ⌘K (`command-palette.tsx`, открыть из кода — `openPalette()`).
+- Типы без запущенного api: `app.openapi()` в JSON → `npx openapi-typescript файл.json -o src/lib/api/schema.d.ts`.
 - Ответ менеджера кладётся и в чекпоинт бота (`Agent.remember_manager_reply`), иначе после «Вернуть боту» бот его не знает.
 - Примитивы — `components/ui`, свои, на нативных `button`, `label`, `select`, `dialog`. Новый шрифт проверять по таблице символов: `ә ғ қ ң ө ұ ү һ і` и ₸.
 - Новые страницы в запущенном `next dev` могут отдавать 404 до перезапуска. Новая зависимость в контейнере — `make up` (пересоздаёт анонимный том `node_modules`).
@@ -155,7 +168,8 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 Решения — [ADR 0008](docs/adr/0008-demo-mode.md). `DEMO_ENABLED=true` (так в `.env.example`).
 
 - `POST /demo/login` — вход владельцем «Цветы Пион»; `ensure_demo_shop` досеивает каталог, историю (`app/demo/activity.py`, покупатели `demo:*`, пересоздаётся старше 2 дней) и баланс. `make seed` делает то же.
-- `POST /demo/chat {message, session_id}` — публичный чат лендинга, граф песочницы, 12 в минуту и 60 в час на IP, в ответе `cards` с ценой из БД.
+- `POST /demo/chat {message, session_id}` — публичный чат лендинга, граф песочницы, 12 в минуту и 60 в час на IP, `DEMO_CHAT_DAILY_LIMIT` в сутки на всех, в ответе `cards` с ценой из БД.
+- Демо-сессия только читает: не-GET запросы отклоняются с `demo_read_only`, кроме списка `DEMO_WRITABLE` в `app/auth/deps.py` (песочница, перехват, ответ, черновик, статус заявки). Новую изменяющую ручку, нужную в демо, добавлять в этот список.
 - `POST /auth/request-code` при демо и `ENV != prod` возвращает `demo_code`, форма входа показывает его и подставляет. `GET /me` → `demo`.
 
 ## Модели
