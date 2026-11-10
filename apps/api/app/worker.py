@@ -12,9 +12,11 @@ from app.billing.alerts import NOTIFY_OWNER, send_owner_message
 from app.catalog.ingest import run_ingest
 from app.catalog.reindex import reindex_tenant, tenants_needing_reindex
 from app.channels.gateway import FLUSH
+from app.channels.idle import release_idle_conversations
 from app.channels.outbound import Outbound
 from app.channels.processor import Processor
 from app.channels.registry import get_adapters
+from app.channels.staff import notify_staff
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.queue import get_queue
@@ -61,7 +63,18 @@ async def reindex_all(ctx: dict[str, Any]) -> int:
 async def notify_manager(
     ctx: dict[str, Any], tenant_id: str, event: str, payload: dict[str, Any]
 ) -> None:
-    log.info("manager.notify", tenant_id=tenant_id, notification=event, **payload)
+    sent = await notify_staff(get_redis(), uuid.UUID(tenant_id), event, payload, get_adapters())
+    log.info("manager.notify", tenant_id=tenant_id, notification=event, sent=sent, **payload)
+
+
+async def release_idle(ctx: dict[str, Any]) -> int:
+    hours = _settings.human_idle_release_hours
+    if hours <= 0:
+        return 0
+    released = await release_idle_conversations(hours)
+    if released:
+        log.info("conversations.released", count=released)
+    return released
 
 
 async def notify_owner(ctx: dict[str, Any], tenant_id: str, text: str) -> int:
@@ -107,7 +120,8 @@ class WorkerSettings:
         func(reindex_embeddings, name=REINDEX, keep_result=0),
     ]
     cron_jobs: ClassVar[list[Any]] = [
-        cron(reindex_all, minute=set(range(0, 60, 10)), run_at_startup=True)
+        cron(reindex_all, minute=set(range(0, 60, 10)), run_at_startup=True),
+        cron(release_idle, minute=set(range(5, 60, 10))),
     ]
     job_timeout = 1800
     redis_settings = RedisSettings.from_dsn(_settings.redis_url)

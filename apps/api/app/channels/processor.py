@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 import structlog
 from redis.exceptions import LockError
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 
 from app.agent.runtime import Agent
@@ -12,15 +12,19 @@ from app.agent.tools import NOTIFY
 from app.channels.gateway import FLUSH, buffer_key, seq_key
 from app.channels.outbound import Outbound
 from app.channels.store import load_channel
-from app.channels.types import ChannelConfig, IncomingMessage
+from app.channels.types import ChannelConfig, ChannelError, IncomingMessage, OutgoingMessage
 from app.core.queue import Queue
 from app.db.session import tenant_session
-from app.models import Conversation, Customer
+from app.models import Conversation, Customer, Message
 
 log = structlog.get_logger()
 
 LOCK_TTL = 600
 BUSY_DELAY = 1.0
+GIVE_UP_REPLY = (
+    "Не получилось ответить сразу, передали ваш вопрос менеджеру."
+    " Жауап бере алмадық, сұрағыңызды менеджерге жібердік."
+)
 Outcome = Literal["superseded", "empty", "skipped", "busy", "done"]
 
 
@@ -172,7 +176,31 @@ class Processor:
         channel = await load_channel(uuid.UUID(channel_id))
         if head is None or channel is None:
             return
-        conversation_id = await open_conversation(
-            channel, IncomingMessage.model_validate_json(head)
-        )
+        message = IncomingMessage.model_validate_json(head)
+        conversation_id = await open_conversation(channel, message)
+        delivered = True
+        try:
+            await self.outbound.send(
+                channel.id, message.customer_external_id, OutgoingMessage(text=GIVE_UP_REPLY)
+            )
+        except ChannelError as exc:
+            delivered = False
+            log.warning("channel.give_up_send_failed", channel_id=channel_id, error=str(exc))
+        async with tenant_session(channel.tenant_id) as session:
+            session.add(
+                Message(
+                    tenant_id=channel.tenant_id,
+                    conversation_id=conversation_id,
+                    role="bot",
+                    content=GIVE_UP_REPLY,
+                    trace={
+                        "steps": [{"node": "send", "delivered": delivered, "failed_turn": True}]
+                    },
+                )
+            )
+            await session.execute(
+                update(Conversation)
+                .where(Conversation.id == conversation_id)
+                .values(mode="human", last_message_at=func.now())
+            )
         await self.notify(channel, conversation_id, "turn_failed")

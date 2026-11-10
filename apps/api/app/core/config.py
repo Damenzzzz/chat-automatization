@@ -74,6 +74,7 @@ class Settings(BaseSettings):
 
     analytics_timezone: str = "Asia/Almaty"
     bot_replies_per_hour: int = 30
+    human_idle_release_hours: int = 12
     unanswered_group_threshold: float = 0.85
 
     demo_enabled: bool = False
