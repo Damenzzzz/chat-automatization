@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Mic, Package, SendHorizontal, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Mic, Package, SendHorizontal, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import useSWR, { useSWRConfig } from "swr";
@@ -10,10 +10,12 @@ import { Notice } from "@/components/ui/notice";
 import { FormError, LoadError, Loading } from "@/components/ui/page";
 import { api, type Schemas } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/errors";
+import { useSession } from "@/components/shell/session";
 import { clock, money, shortDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { CHANNEL_NAMES, customerName, LEAD_STATUS, PAUSED } from "./labels";
+import { CustomerCard } from "./customer-card";
 import { LeadCard } from "./lead-card";
 import { HowBotFound } from "./trace";
 
@@ -139,15 +141,15 @@ function Messages({ detail }: { detail: Detail }) {
   );
 }
 
-function Composer({ id, onSent }: { id: string; onSent: () => void }) {
+function Composer({ id, human, onSent }: { id: string; human: boolean; onSent: () => void }) {
+  const { shop } = useSession();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [draft, setDraft] = useState<Schemas["DraftOut"] | null>(null);
+  const [drafting, setDrafting] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    field.current?.focus();
-  }, []);
+  const templates = shop?.reply_templates ?? [];
 
   async function send(event?: FormEvent) {
     event?.preventDefault();
@@ -162,6 +164,7 @@ function Composer({ id, onSent }: { id: string; onSent: () => void }) {
         }),
       );
       setText("");
+      setDraft(null);
       onSent();
     } catch (failure) {
       setError(failure);
@@ -170,14 +173,99 @@ function Composer({ id, onSent }: { id: string; onSent: () => void }) {
     }
   }
 
+  async function suggest() {
+    setDrafting(true);
+    setError(null);
+    try {
+      setDraft(
+        await unwrap(
+          api.POST("/conversations/{conversation_id}/draft", {
+            params: { path: { conversation_id: id } },
+          }),
+        ),
+      );
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setDrafting(false);
+    }
+  }
+
+  function insert(value: string) {
+    setText((current) => (current.trim() ? `${current.trimEnd()}\n${value}` : value));
+    field.current?.focus();
+  }
+
   function keydown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) void send();
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    const touch = window.matchMedia("(pointer: coarse)").matches;
+    if (event.metaKey || event.ctrlKey || (!event.shiftKey && !touch)) {
+      event.preventDefault();
+      void send();
+    }
   }
 
   return (
-    <form onSubmit={send} className="border-t border-line bg-paper p-3">
+    <form onSubmit={send} className="flex flex-col gap-2 border-t border-line bg-paper p-3">
       <FormError error={error} />
-      <div className={cn("flex items-end gap-2", error ? "mt-2" : "")}>
+      {draft && (
+        <div className="rounded-md border border-dashed border-sky bg-sky-soft p-3 text-sm">
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3 font-medium">
+            Черновик бота
+            <span className="text-xs font-normal text-steel">
+              {draft.verified
+                ? "цены сверены с каталогом"
+                : "проверьте суммы: бот не нашёл их в каталоге"}
+            </span>
+          </p>
+          <p className="mt-1 [overflow-wrap:anywhere] whitespace-pre-wrap">{draft.text}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              variant="dark"
+              className="min-h-9 px-3 sm:min-h-9"
+              onClick={() => {
+                insert(draft.text);
+                setDraft(null);
+              }}
+            >
+              Вставить
+            </Button>
+            <Button
+              variant="secondary"
+              className="min-h-9 px-3 sm:min-h-9"
+              loading={drafting}
+              onClick={() => void suggest()}
+            >
+              Другой вариант
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        {!draft && (
+          <button
+            type="button"
+            disabled={drafting}
+            onClick={() => void suggest()}
+            className="flex min-h-8 items-center gap-1.5 rounded-full border border-sky bg-sky-soft px-3 text-xs font-medium hover:bg-paper disabled:opacity-60"
+          >
+            <Sparkles className="size-3.5" aria-hidden />
+            {drafting ? "Бот пишет черновик" : "Черновик от бота"}
+          </button>
+        )}
+        {templates.map((template) => (
+          <button
+            key={template.title}
+            type="button"
+            title={template.text}
+            onClick={() => insert(template.text)}
+            className="min-h-8 rounded-full border border-line bg-paper px-3 text-xs hover:border-control"
+          >
+            {template.title}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-end gap-2">
         <label htmlFor="manager-reply" className="sr-only">
           Ваш ответ покупателю
         </label>
@@ -189,7 +277,7 @@ function Composer({ id, onSent }: { id: string; onSent: () => void }) {
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={keydown}
-          placeholder="Ответ покупателю"
+          placeholder={human ? "Ответ покупателю" : "Напишите сами, и диалог перейдёт к вам"}
           className="min-w-0 flex-1 resize-none rounded-md border border-control px-3 py-2 hover:border-ink"
         />
         <Button type="submit" loading={busy} disabled={!text.trim()}>
@@ -197,6 +285,10 @@ function Composer({ id, onSent }: { id: string; onSent: () => void }) {
           <span className="max-sm:sr-only">Отправить</span>
         </Button>
       </div>
+      <p className="text-xs text-steel max-sm:hidden">
+        Enter отправляет, Shift+Enter переносит строку.
+        {!human && " Пока вы не написали, отвечает бот."}
+      </p>
     </form>
   );
 }
@@ -301,35 +393,43 @@ export function Thread({ id }: { id: string }) {
             <FormError error={switchError} />
           </div>
         ) : null}
-        {lead && (
-          <details className="border-b border-line lg:hidden">
-            <summary className="flex min-h-11 items-center px-4 text-sm font-medium">
-              Заявка: {LEAD_STATUS[lead.status]}
-              {lead.total_kzt ? `, ${money(lead.total_kzt)}` : ""}
-            </summary>
-            <div className="px-4 pb-4">
-              <LeadsPanel detail={data} />
-            </div>
-          </details>
-        )}
+        <details className="border-b border-line xl:hidden">
+          <summary className="flex min-h-11 items-center px-4 text-sm font-medium sm:px-6">
+            Покупатель
+            {lead
+              ? `, заявка: ${LEAD_STATUS[lead.status].toLowerCase()}${lead.total_kzt ? ` на ${money(lead.total_kzt)}` : ""}`
+              : ""}
+          </summary>
+          <div className="flex flex-col gap-6 px-4 pb-4 sm:px-6">
+            <CustomerCard
+              conversationId={id}
+              customer={data.customer}
+              onSaved={() => void mutate()}
+            />
+            <LeadsPanel detail={data} />
+          </div>
+        </details>
         <Messages detail={data} />
-        {human ? (
-          <Composer key={id} id={id} onSent={refreshAll} />
+        {data.channel ? (
+          <Composer key={id} id={id} human={human} onSent={refreshAll} />
         ) : (
           <p className="border-t border-line bg-paper px-4 py-3 text-sm text-steel sm:px-6">
-            Сейчас отвечает бот. Чтобы написать самому, перехватите диалог.
+            Диалог не связан с каналом, ответить в него нельзя.
           </p>
         )}
       </section>
-      {lead && (
-        <aside
-          aria-label="Заявка"
-          className="hidden w-72 shrink-0 overflow-y-auto border-l border-line p-5 lg:block"
-        >
-          <h2 className="mb-3 text-lg">Заявка</h2>
-          <LeadsPanel detail={data} />
-        </aside>
-      )}
+      <aside
+        aria-label="Покупатель"
+        className="hidden w-72 shrink-0 flex-col gap-6 overflow-y-auto border-l border-line bg-canvas p-5 xl:flex"
+      >
+        <CustomerCard conversationId={id} customer={data.customer} onSaved={() => void mutate()} />
+        {lead && (
+          <div>
+            <h2 className="mb-3 text-lg">Заявка</h2>
+            <LeadsPanel detail={data} />
+          </div>
+        )}
+      </aside>
     </div>
   );
 }

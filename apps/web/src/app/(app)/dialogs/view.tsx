@@ -1,9 +1,9 @@
 "use client";
 
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 
 import { CHANNEL_NAMES, customerName, LEAD_STATUS } from "@/components/dialogs/labels";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Empty, LoadError, Loading } from "@/components/ui/page";
 import { api, type Schemas } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/errors";
-import { whenShort } from "@/lib/format";
+import { waitedFor, whenShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Row = Schemas["ConversationRow"];
@@ -67,7 +67,14 @@ function RowLink({ row, active, filter }: { row: Row; active: boolean; filter: F
           )}
           {customerName(row)}
         </span>
-        <span className="shrink-0 text-xs text-steel tnum">{whenShort(row.last_message_at)}</span>
+        {row.waiting ? (
+          <span className="shrink-0 rounded-full bg-sun-soft px-2 text-xs font-semibold tnum">
+            <span className="sr-only">ждёт </span>
+            {waitedFor(row.last_message_at)}
+          </span>
+        ) : (
+          <span className="shrink-0 text-xs text-steel tnum">{whenShort(row.last_message_at)}</span>
+        )}
       </span>
       <span className="mt-0.5 line-clamp-1 text-sm text-steel">
         {ROLE_PREFIX[row.preview_role ?? ""] ?? ""}
@@ -90,13 +97,26 @@ function List({ filter, activeId }: { filter: Filter; activeId: string | null })
   const [pages, setPages] = useState<Record<string, Row[]>>({});
   const [next, setNext] = useState<string | null | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [input, setInput] = useState("");
+  const [q, setQ] = useState("");
 
-  const { data, error, isLoading, mutate } = useSWR(`/conversations?filter=${filter}`, () =>
-    unwrap(api.GET("/conversations", { params: { query: { filter } } })),
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQ(input.trim());
+      setNext(undefined);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [input]);
+
+  const { data, error, isLoading, mutate } = useSWR(
+    `/conversations?filter=${filter}&q=${q}`,
+    () => unwrap(api.GET("/conversations", { params: { query: { filter, q: q || undefined } } })),
+    { keepPreviousData: true },
   );
 
   const counts = data?.counts;
-  const more = pages[filter] ?? [];
+  const bucket = `${filter}:${q}`;
+  const more = pages[bucket] ?? [];
   const cursor = next === undefined ? data?.next_before : next;
 
   async function loadMore() {
@@ -104,9 +124,11 @@ function List({ filter, activeId }: { filter: Filter; activeId: string | null })
     setLoadingMore(true);
     try {
       const page = await unwrap(
-        api.GET("/conversations", { params: { query: { filter, before: cursor } } }),
+        api.GET("/conversations", {
+          params: { query: { filter, before: cursor, q: q || undefined } },
+        }),
       );
-      setPages({ ...pages, [filter]: [...more, ...page.items] });
+      setPages({ ...pages, [bucket]: [...more, ...page.items] });
       setNext(page.next_before ?? null);
     } finally {
       setLoadingMore(false);
@@ -122,6 +144,23 @@ function List({ filter, activeId }: { filter: Filter; activeId: string | null })
         <p aria-hidden className="display text-xl">
           Диалоги
         </p>
+        <div className="relative mt-3">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-steel"
+            aria-hidden
+          />
+          <label htmlFor="dialog-search" className="sr-only">
+            Поиск по диалогам
+          </label>
+          <input
+            id="dialog-search"
+            type="search"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Имя, телефон или текст"
+            className="min-h-10 w-full rounded-md border border-control bg-paper pr-3 pl-9 text-sm hover:border-ink"
+          />
+        </div>
         <nav aria-label="Фильтр диалогов" className="mt-3 -ml-1 flex flex-wrap gap-1">
           {FILTERS.map((item) => {
             const active = item.value === filter;
@@ -149,7 +188,7 @@ function List({ filter, activeId }: { filter: Filter; activeId: string | null })
         </nav>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {isLoading && <Loading className="px-4" />}
+        {isLoading && !data && <Loading className="px-4" />}
         {error ? (
           <div className="px-4">
             <LoadError error={error} retry={() => void mutate()} />
@@ -157,7 +196,11 @@ function List({ filter, activeId }: { filter: Filter; activeId: string | null })
         ) : null}
         {data && rows.length === 0 && (
           <div className="px-4">
-            <Empty title={EMPTY[filter].title}>{EMPTY[filter].text}</Empty>
+            {q ? (
+              <Empty title="Ничего не нашлось">Проверьте написание или поищите по телефону.</Empty>
+            ) : (
+              <Empty title={EMPTY[filter].title}>{EMPTY[filter].text}</Empty>
+            )}
           </div>
         )}
         <ul className="divide-y divide-line">
@@ -191,7 +234,12 @@ export function DialogsView() {
   const filter: Filter = raw === "bot" || raw === "human" || raw === "leads" ? raw : "all";
 
   return (
-    <div className="flex min-h-0 max-lg:h-[calc(100dvh-3.5rem)] lg:flex-1">
+    <div
+      className={cn(
+        "flex min-h-0 lg:flex-1",
+        id ? "max-lg:h-[calc(100dvh-3.5rem)]" : "max-lg:h-[calc(100dvh-7rem)]",
+      )}
+    >
       <h1 className="sr-only">Диалоги</h1>
       <div
         className={cn(
