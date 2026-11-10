@@ -42,6 +42,9 @@ class MetricsOut(BaseModel):
     leads: int
     leads_total_kzt: int
     avg_response_ms: int | None
+    spent_kzt: int
+    found_dialogs: int
+    leads_done: int
 
 
 class OverviewOut(BaseModel):
@@ -65,6 +68,9 @@ def metrics_out(period: Period, metrics: Metrics) -> MetricsOut:
         leads=metrics.leads,
         leads_total_kzt=metrics.leads_total_kzt,
         avg_response_ms=metrics.avg_response_ms,
+        spent_kzt=metrics.spent_kzt,
+        found_dialogs=metrics.found_dialogs,
+        leads_done=metrics.leads_done,
     )
 
 

@@ -85,6 +85,9 @@ async def test_overview_counts_and_compares_with_previous_period(
         "leads": 2,
         "leads_total_kzt": 60000,
         "avg_response_ms": 2000,
+        "spent_kzt": 0,
+        "found_dialogs": 0,
+        "leads_done": 0,
     }
     assert body["previous"]["dialogs"] == 2
     assert body["previous"]["bot_resolved_share"] == 0.5

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.analytics.period import Period, timezone
-from app.models import Conversation, Lead, Message
+from app.models import Conversation, Lead, LedgerEntry, Message, SearchLog
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,9 @@ class Metrics:
     leads: int
     leads_total_kzt: int
     avg_response_ms: int | None
+    spent_kzt: int = 0
+    found_dialogs: int = 0
+    leads_done: int = 0
 
 
 def _customer_messages(period: Period) -> Any:
@@ -51,9 +54,13 @@ async def collect_metrics(session: AsyncSession, period: Period) -> Metrics:
         )
     ).one()
 
-    leads, leads_total = (
+    leads, leads_total, leads_done = (
         await session.execute(
-            select(func.count(Lead.id), func.coalesce(func.sum(Lead.total_kzt), 0))
+            select(
+                func.count(Lead.id),
+                func.coalesce(func.sum(Lead.total_kzt), 0),
+                func.count(case((Lead.status == "done", 1))),
+            )
             .outerjoin(Conversation, Conversation.id == Lead.conversation_id)
             .where(
                 Lead.created_at >= period.start,
@@ -75,7 +82,25 @@ async def collect_metrics(session: AsyncSession, period: Period) -> Metrics:
             Conversation.sandbox.is_(False),
         )
     )
+    spent = await session.scalar(
+        select(func.coalesce(-func.sum(LedgerEntry.amount_kzt), 0)).where(
+            LedgerEntry.type == "charge",
+            LedgerEntry.created_at >= period.start,
+            LedgerEntry.created_at < period.end,
+        )
+    )
+    found = await session.scalar(
+        select(func.count(func.distinct(SearchLog.conversation_id))).where(
+            SearchLog.kind == "product",
+            SearchLog.result_count > 0,
+            SearchLog.created_at >= period.start,
+            SearchLog.created_at < period.end,
+        )
+    )
     return Metrics(
+        spent_kzt=int(spent or 0),
+        found_dialogs=int(found or 0),
+        leads_done=int(leads_done or 0),
         dialogs=int(dialogs),
         bot_resolved=int(resolved),
         bot_resolved_share=round(int(resolved) / int(dialogs), 4) if dialogs else None,
