@@ -1,3 +1,4 @@
+import math
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -31,15 +32,22 @@ class BalanceOut(BaseModel):
     last_topup_kzt: int | None
 
 
-def days_left(balance: int, spent: int) -> int | None:
+def days_left(balance: int, spent: int, days: int = FORECAST_DAYS) -> int | None:
     if spent <= 0:
         return None
-    return max(balance, 0) * FORECAST_DAYS // spent
+    return max(balance, 0) * days // spent
+
+
+def spending_days(first_charge: datetime | None, now: datetime) -> int:
+    if first_charge is None:
+        return FORECAST_DAYS
+    return min(FORECAST_DAYS, max(1, math.ceil((now - first_charge) / timedelta(days=1))))
 
 
 @router.get("/balance")
 async def balance(principal: Member, db: TenantDb) -> BalanceOut:
-    moment = datetime.now(UTC) - timedelta(days=FORECAST_DAYS)
+    now = datetime.now(UTC)
+    moment = now - timedelta(days=FORECAST_DAYS)
     spent, replies = (
         await db.execute(
             select(
@@ -53,12 +61,15 @@ async def balance(principal: Member, db: TenantDb) -> BalanceOut:
         .order_by(LedgerEntry.created_at.desc())
         .limit(1)
     )
+    first_charge = await db.scalar(
+        select(func.min(LedgerEntry.created_at)).where(LedgerEntry.type == "charge")
+    )
     current = await get_balance(db)
     return BalanceOut(
         balance_kzt=current,
         spent_7d_kzt=int(spent),
         replies_7d=int(replies),
-        days_left=days_left(current, int(spent)),
+        days_left=days_left(current, int(spent), spending_days(first_charge, now)),
         last_topup_kzt=last_topup,
     )
 

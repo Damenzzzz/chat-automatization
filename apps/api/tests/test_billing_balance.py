@@ -74,6 +74,17 @@ async def test_balance_of_empty_shop(client: AsyncClient, owner: uuid.UUID) -> N
     }
 
 
+async def test_forecast_of_new_shop_uses_days_with_charges(
+    client: AsyncClient, owner: uuid.UUID, owner_engine: AsyncEngine
+) -> None:
+    await topup(owner_engine, owner, 5000)
+    await _charge(owner_engine, owner, 700, age="1")
+
+    body = (await client.get("/balance")).json()
+
+    assert body["days_left"] == 4300 * 2 // 700
+
+
 @pytest.mark.parametrize(
     ("current", "spent", "expected"),
     [(700, 700, 7), (100, 700, 1), (99, 700, 0), (5000, 0, None), (0, 700, 0), (-5, 700, 0)],
