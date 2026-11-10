@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 
 import { DialogsChart } from "@/components/overview/dialogs-chart";
+import { Queue } from "@/components/overview/queue";
 import { Unanswered } from "@/components/overview/unanswered";
 import { Empty, LoadError, Loading, Page, PageHeader, Section } from "@/components/ui/page";
 import { api, type Schemas } from "@/lib/api/client";
@@ -87,34 +88,78 @@ function Figure({
 function Metrics({ data }: { data: Schemas["OverviewOut"] }) {
   const { current, change_percent: change } = data;
   const share = current.bot_resolved_share;
-  const seconds =
-    current.avg_response_ms === null || current.avg_response_ms === undefined
-      ? null
-      : current.avg_response_ms / 1000;
+  const perLead = current.leads > 0 ? Math.round(current.spent_kzt / current.leads) : null;
+  const spentShare =
+    current.leads_total_kzt > 0 ? (current.spent_kzt / current.leads_total_kzt) * 100 : null;
   return (
-    <dl className="grid grid-cols-2 gap-3 pb-6 lg:grid-cols-4 lg:gap-4">
+    <dl className="grid grid-cols-2 gap-3 pb-4 lg:grid-cols-4 lg:gap-4">
       <Figure
-        label="Диалоги"
-        value={count(current.dialogs)}
-        note={<Change value={change.dialogs} />}
+        label="Заявки"
+        value={money(current.leads_total_kzt)}
+        note={
+          <>
+            {count(current.leads)} {plural(current.leads, "заявка", "заявки", "заявок")},{" "}
+            <Change value={change.leads_total_kzt} />
+          </>
+        }
       />
       <Figure
         accent
         label="Бот справился сам"
         value={share === null || share === undefined ? "нет данных" : `${Math.round(share * 100)}%`}
-        note={`${count(current.bot_resolved)} ${plural(current.bot_resolved, "диалог", "диалога", "диалогов")} без менеджера`}
+        note={`${count(current.bot_resolved)} из ${count(current.dialogs)} ${plural(current.dialogs, "диалога", "диалогов", "диалогов")}`}
       />
       <Figure
-        label="Заявки"
-        value={count(current.leads)}
-        note={`на ${money(current.leads_total_kzt)}`}
+        label="Расход на бота"
+        value={money(current.spent_kzt)}
+        note={
+          spentShare === null
+            ? "за ответы покупателям"
+            : `${spentShare < 1 ? spentShare.toFixed(1).replace(".", ",") : Math.round(spentShare)}% от суммы заявок`
+        }
       />
       <Figure
-        label="Скорость ответа"
-        value={seconds === null ? "нет данных" : `${seconds.toFixed(1).replace(".", ",")} с`}
-        note="в среднем"
+        label="Цена одной заявки"
+        value={perLead === null ? "нет заявок" : money(perLead)}
+        note="расход, делённый на заявки"
       />
     </dl>
+  );
+}
+
+function Funnel({ data }: { data: Schemas["MetricsOut"] }) {
+  const steps = [
+    { label: "Диалоги", value: data.dialogs },
+    { label: "Бот нашёл товар", value: Math.min(data.found_dialogs, data.dialogs) },
+    { label: "Оставили заявку", value: data.leads },
+    { label: "Заказ выполнен", value: data.leads_done },
+  ];
+  const max = Math.max(data.dialogs, 1);
+  return (
+    <ol className="flex flex-col gap-2.5">
+      {steps.map((step, index) => {
+        const previous = steps[index - 1]?.value;
+        const rate = previous ? Math.round((step.value / previous) * 100) : null;
+        return (
+          <li
+            key={step.label}
+            className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm"
+          >
+            <span className="text-steel">{step.label}</span>
+            <span aria-hidden className="h-3.5 rounded-sm bg-haze">
+              <span
+                className="block h-full rounded-sm bg-sky"
+                style={{ width: `${Math.min(100, (step.value / max) * 100)}%` }}
+              />
+            </span>
+            <span className="min-w-16 text-right tnum">
+              <span className="font-semibold">{count(step.value)}</span>
+              {rate !== null && <span className="ml-1.5 text-xs text-steel">{rate}%</span>}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -182,7 +227,7 @@ export function OverviewView() {
   return (
     <Page>
       <PageHeader
-        title="Обзор"
+        title="Сегодня"
         actions={
           <div role="group" aria-label="Период" className="flex gap-1">
             {PERIODS.map((period) => (
@@ -204,11 +249,23 @@ export function OverviewView() {
       >
         <BalanceLine />
       </PageHeader>
+      <section aria-label="Ждут вас" className="mb-4 overflow-hidden panel">
+        <h2 className="border-b border-line px-4 py-3 text-lg sm:px-5">Ждут вас</h2>
+        <Queue range={range} />
+      </section>
       {overview.isLoading && !overview.data && <Loading />}
       {overview.error ? (
         <LoadError error={overview.error} retry={() => void overview.mutate()} />
       ) : null}
       {overview.data && <Metrics data={overview.data} />}
+      {overview.data && (
+        <Section
+          title="Путь покупателя"
+          description="Сколько диалогов дошло до заявки и выполненного заказа за период."
+        >
+          <Funnel data={overview.data.current} />
+        </Section>
+      )}
       <Section title="Диалоги по дням">
         {series.data ? (
           <DialogsChart days={series.data} />
@@ -229,6 +286,7 @@ export function OverviewView() {
           )}
         </Section>
         <Section
+          id="unanswered"
           title="Бот не знал ответа"
           description="Ответьте один раз, и бот будет знать это дальше."
         >

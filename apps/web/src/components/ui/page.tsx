@@ -41,7 +41,9 @@ export function Section({
   actions,
   children,
   className,
+  id,
 }: {
+  id?: string;
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
@@ -49,7 +51,7 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("mb-4 panel p-5 sm:p-6", className)}>
+    <section id={id} className={cn("mb-4 scroll-mt-20 panel p-5 sm:p-6", className)}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="max-w-2xl">
           <h2 className="text-lg">{title}</h2>
