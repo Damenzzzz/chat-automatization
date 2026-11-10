@@ -1,9 +1,13 @@
+import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.crypto import CryptoError
 from app.core.logging import configure_logging
+from app.core.redis import get_redis
+from app.db.session import get_engine
 from app.routers import (
     admin,
     analytics,
@@ -28,16 +32,38 @@ from app.routers import (
     widget,
 )
 
+log = structlog.get_logger()
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level, json=settings.env == "prod")
 
-    app = FastAPI(title="Satushy API", version="0.1.0")
+    docs = settings.env != "prod"
+    app = FastAPI(
+        title="Satushy API",
+        version="0.1.0",
+        docs_url="/docs" if docs else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if docs else None,
+    )
 
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/ready", tags=["system"])
+    async def ready() -> JSONResponse:
+        checks = {"postgres": False, "redis": False}
+        try:
+            async with get_engine().connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            checks["postgres"] = True
+            checks["redis"] = bool(await get_redis().ping())
+        except Exception:
+            log.exception("ready.failed")
+        code = status.HTTP_200_OK if all(checks.values()) else status.HTTP_503_SERVICE_UNAVAILABLE
+        return JSONResponse(checks, status_code=code)
 
     @app.exception_handler(CryptoError)
     async def crypto_error(request: Request, exc: CryptoError) -> JSONResponse:
