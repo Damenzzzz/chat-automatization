@@ -53,6 +53,17 @@ class MLClient:
         self.batch_size = batch_size
         self._transport = transport
         self._sleep = sleep
+        self._http: httpx.AsyncClient | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _client(self) -> httpx.AsyncClient:
+        loop = asyncio.get_running_loop()
+        if self._http is None or self._http.is_closed or self._loop is not loop:
+            self._http = httpx.AsyncClient(
+                base_url=self.base_url, timeout=self.timeout, transport=self._transport
+            )
+            self._loop = loop
+        return self._http
 
     async def _post(
         self,
@@ -60,21 +71,19 @@ class MLClient:
         payload: dict[str, Any] | None = None,
         files: dict[str, tuple[str, bytes, str]] | None = None,
     ) -> dict[str, Any]:
-        async with httpx.AsyncClient(
-            base_url=self.base_url, timeout=self.timeout, transport=self._transport
-        ) as http:
-            for attempt in range(self.max_retries + 1):
-                try:
-                    response = await http.post(path, json=payload, files=files)
-                    response.raise_for_status()
-                    body: dict[str, Any] = response.json()
-                    return body
-                except httpx.HTTPError as exc:
-                    if not _retryable(exc) or attempt == self.max_retries:
-                        raise MLError(f"{path}: {exc!r}") from exc
-                    delay = min(10.0, 0.5 * 2**attempt) * (0.5 + random.random() / 2)  # noqa: S311
-                    log.info("ml.retry", path=path, attempt=attempt, delay=round(delay, 2))
-                    await self._sleep(delay)
+        http = self._client()
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await http.post(path, json=payload, files=files)
+                response.raise_for_status()
+                body: dict[str, Any] = response.json()
+                return body
+            except httpx.HTTPError as exc:
+                if not _retryable(exc) or attempt == self.max_retries:
+                    raise MLError(f"{path}: {exc!r}") from exc
+                delay = min(10.0, 0.5 * 2**attempt) * (0.5 + random.random() / 2)  # noqa: S311
+                log.info("ml.retry", path=path, attempt=attempt, delay=round(delay, 2))
+                await self._sleep(delay)
         raise AssertionError("unreachable")
 
     async def embed(self, texts: list[str], kind: Kind) -> list[list[float]]:

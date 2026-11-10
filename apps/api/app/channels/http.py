@@ -30,29 +30,35 @@ class ChannelHttp:
         self.sleep = sleep
         self.timeout = timeout
         self.max_retries = max_retries
+        self._http: httpx.AsyncClient | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            timeout=self.timeout, transport=self.transport, follow_redirects=True
-        )
+        loop = asyncio.get_running_loop()
+        if self._http is None or self._http.is_closed or self._loop is not loop:
+            self._http = httpx.AsyncClient(
+                timeout=self.timeout, transport=self.transport, follow_redirects=True
+            )
+            self._loop = loop
+        return self._http
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        async with self._client() as http:
-            for attempt in range(self.max_retries + 1):
-                last = attempt == self.max_retries
-                try:
-                    response = await http.request(method, url, **kwargs)
-                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
-                    if last:
-                        raise ChannelError(f"{self.service}: сеть недоступна") from None
-                    await self.sleep(0.5 * 2**attempt)
-                    continue
-                except httpx.HTTPError as exc:
-                    kind = type(exc).__name__
-                    raise ChannelError(f"{self.service}: запрос не выполнен ({kind})") from None
-                if last or (response.status_code != 429 and response.status_code < 500):
-                    return response
-                await self.sleep(self._delay(response, attempt))
+        http = self._client()
+        for attempt in range(self.max_retries + 1):
+            last = attempt == self.max_retries
+            try:
+                response = await http.request(method, url, **kwargs)
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+                if last:
+                    raise ChannelError(f"{self.service}: сеть недоступна") from None
+                await self.sleep(0.5 * 2**attempt)
+                continue
+            except httpx.HTTPError as exc:
+                kind = type(exc).__name__
+                raise ChannelError(f"{self.service}: запрос не выполнен ({kind})") from None
+            if last or (response.status_code != 429 and response.status_code < 500):
+                return response
+            await self.sleep(self._delay(response, attempt))
         raise AssertionError("unreachable")
 
     def _delay(self, response: httpx.Response, attempt: int) -> float:
@@ -66,7 +72,7 @@ class ChannelHttp:
         chunks: list[bytes] = []
         size = 0
         try:
-            async with self._client() as http, http.stream("GET", url, headers=headers) as response:
+            async with self._client().stream("GET", url, headers=headers) as response:
                 if response.status_code != 200:
                     raise ChannelError(
                         f"{self.service}: файл не скачан (HTTP {response.status_code})"
