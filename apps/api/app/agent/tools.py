@@ -271,6 +271,6 @@ class ToolBox:
             return ToolOutcome({"error": f"неизвестный инструмент {call.name}"})
         try:
             outcome: ToolOutcome = await handler(**call.args)
-        except TypeError as exc:
+        except (TypeError, ValueError, AttributeError) as exc:
             return ToolOutcome({"error": f"неверные аргументы: {exc}"})
         return outcome

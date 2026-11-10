@@ -124,6 +124,8 @@ async def test_run_dispatch_errors(shop: tuple[uuid.UUID, uuid.UUID]) -> None:
     tools, _ = box(shop)
     assert "error" in (await tools.run(ToolCall("drop_tables", {}))).result
     assert "error" in (await tools.run(ToolCall("get_product", {"bad": 1}))).result
+    bad_qty = {"items": [{"sku": "RS-101", "qty": "2 шт"}], "contact_phone": "+77011234567"}
+    assert "error" in (await tools.run(ToolCall("create_lead", bad_qty))).result
     ok = await tools.run(ToolCall("get_product", {"sku": "RS-101"}))
     assert ok.result["product"]["stock"] == 0
 
