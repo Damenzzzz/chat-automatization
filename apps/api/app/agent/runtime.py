@@ -80,9 +80,17 @@ class Agent:
             await self.graph.aupdate_state(config, {"messages": [AIMessage(text)]}, as_node="meter")
 
 
+_cached: tuple[tuple[Any, ...], Agent] | None = None
+
+
 async def get_agent(
     llm: Annotated[LLM | None, Depends(get_llm)],
     ml: Annotated[MLClient, Depends(get_ml_client)],
     queue: Annotated[Queue, Depends(get_queue)],
 ) -> Agent:
-    return Agent(AgentDeps(llm=llm, ml=ml, queue=queue), await get_checkpointer())
+    global _cached
+    checkpointer = await get_checkpointer()
+    key = (llm, ml, queue, checkpointer)
+    if _cached is None or any(a is not b for a, b in zip(_cached[0], key, strict=True)):
+        _cached = (key, Agent(AgentDeps(llm=llm, ml=ml, queue=queue), checkpointer))
+    return _cached[1]

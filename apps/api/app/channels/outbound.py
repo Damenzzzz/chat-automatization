@@ -45,3 +45,12 @@ class Outbound:
             await adapter.acknowledge(channel, message)
         except ChannelError as exc:
             log.warning("channel.ack_failed", channel_id=str(channel_id), error=str(exc))
+
+    async def typing(self, channel_id: uuid.UUID, customer_external_id: str) -> None:
+        try:
+            channel, adapter = await self._resolve(channel_id)
+            show = getattr(adapter, "typing", None)
+            if show is not None:
+                await show(channel, customer_external_id)
+        except ChannelError as exc:
+            log.warning("channel.typing_failed", channel_id=str(channel_id), error=str(exc))

@@ -1,3 +1,4 @@
+import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -83,6 +84,7 @@ def last_human(state: ChatState) -> str:
 class AgentNodes:
     def __init__(self, deps: AgentDeps) -> None:
         self.deps = deps
+        self.background: set[asyncio.Future[None]] = set()
 
     def tenant(self, state: ChatState) -> uuid.UUID:
         return uuid.UUID(state["tenant_id"])
@@ -264,9 +266,19 @@ class AgentNodes:
             replies = await self.bot_replies_last_hour(session, state)
         return "rate_limit" if replies >= get_settings().bot_replies_per_hour else None
 
+    async def show_typing(self, state: ChatState) -> None:
+        typing = getattr(self.deps.channels, "typing", None)
+        channel_id, customer = state.get("channel_id"), state.get("customer_external_id")
+        if typing is None or not channel_id or not customer:
+            return
+        task = asyncio.ensure_future(typing(uuid.UUID(channel_id), customer))
+        self.background.add(task)
+        task.add_done_callback(self.background.discard)
+
     async def gate(self, state: ChatState) -> dict[str, Any]:
         reason = await self.pause_reason(state)
         if reason is None:
+            await self.show_typing(state)
             return {"paused": None, "trace": step(state, "gate", ok=True)}
         await self.toolbox(state).handoff(PAUSE_REASONS[reason])
         async with tenant_session(self.tenant(state)) as session:

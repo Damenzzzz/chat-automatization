@@ -177,6 +177,14 @@ class TelegramAdapter:
         info = await self.call(token, "getFile", file_id=media.file_id)
         return await self.http.download(f"{API}/file/bot{token}/{info['file_path']}")
 
+    async def typing(self, channel: ChannelConfig, customer_external_id: str) -> None:
+        await self.call(
+            channel.credentials["token"],
+            "sendChatAction",
+            chat_id=customer_external_id,
+            action="typing",
+        )
+
     async def acknowledge(self, channel: ChannelConfig, message: IncomingMessage) -> None:
         if message.external_id.startswith(CALLBACK_PREFIX):
             await self.call(
