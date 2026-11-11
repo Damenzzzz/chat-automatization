@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -19,7 +20,7 @@ from app.models import Conversation, Customer, Message, Tenant
 
 log = structlog.get_logger()
 
-LOCK_TTL = 600
+LOCK_TTL = 120
 BUSY_DELAY = 1.0
 GIVE_UP_REPLY = (
     "Не получилось ответить сразу, передали ваш вопрос менеджеру."
@@ -99,6 +100,15 @@ async def open_conversation(channel: ChannelConfig, message: IncomingMessage) ->
     return conversation_id
 
 
+async def keep_locked(lock: Any) -> None:
+    while True:
+        await asyncio.sleep(LOCK_TTL / 3)
+        try:
+            await lock.extend(LOCK_TTL, replace_ttl=True)
+        except LockError:
+            return
+
+
 async def suspended(tenant_id: uuid.UUID) -> bool:
     async with tenant_session(tenant_id) as session:
         status = await session.scalar(select(Tenant.status).where(Tenant.id == tenant_id))
@@ -132,6 +142,7 @@ class Processor:
         if not await lock.acquire():
             await self.queue.enqueue(FLUSH, tenant_id, channel_id, key, seq, defer_by=BUSY_DELAY)
             return "busy"
+        watchdog = asyncio.ensure_future(keep_locked(lock))
         try:
             raw = await self.redis.lrange(buffer, 0, -1)
             if not raw:
@@ -162,6 +173,7 @@ class Processor:
             )
             return "done"
         finally:
+            watchdog.cancel()
             try:
                 await lock.release()
             except LockError:
