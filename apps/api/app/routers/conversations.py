@@ -21,6 +21,7 @@ from app.auth.deps import CurrentUser, Principal, TenantDb, require_role
 from app.channels.outbound import Outbound
 from app.channels.registry import get_adapters
 from app.channels.types import ChannelError, OutgoingMessage
+from app.core.poke import cabinet_channel, poke
 from app.core.ratelimit import limit
 from app.core.redis import get_redis
 from app.db.session import tenant_session
@@ -37,7 +38,8 @@ Filter = Literal["all", "bot", "human", "leads"]
 MAX_MESSAGES = 200
 CUSTOMER_LEADS = 5
 DRAFTS_PER_HOUR = 60
-POLL_SECONDS = 1.5
+POLL_SECONDS = 5.0
+SETTLE_SECONDS = 0.15
 STREAM_SECONDS = 300
 PING_SECONDS = 15
 
@@ -271,34 +273,47 @@ async def stream_changes(
     max_seconds: float = STREAM_SECONDS,
 ) -> AsyncGenerator[str]:
     async with tenant_session(tenant_id) as session:
-        since = await session.scalar(select(func.now()))
+        since: datetime = (await session.execute(select(func.now()))).scalar_one()
     deadline = time.monotonic() + max_seconds
     pinged = time.monotonic()
-    yield "retry: 3000\n\n"
-    while time.monotonic() < deadline and not await is_disconnected():
-        await asyncio.sleep(poll_seconds)
-        async with tenant_session(tenant_id) as session:
-            rows = (
-                await session.execute(
-                    select(Conversation.id, Conversation.updated_at).where(
-                        Conversation.updated_at > since, Conversation.sandbox.is_(False)
-                    )
+    pubsub = get_redis().pubsub()
+    await pubsub.subscribe(cabinet_channel(tenant_id))
+    try:
+        yield "retry: 3000\n\n"
+        while time.monotonic() < deadline and not await is_disconnected():
+            if await pubsub.get_message(ignore_subscribe_messages=True, timeout=poll_seconds):
+                await asyncio.sleep(SETTLE_SECONDS)
+            event = await changes_since(tenant_id, since)
+            if event:
+                since, data = event
+                yield f"event: change\ndata: {data}\n\n"
+                pinged = time.monotonic()
+            elif time.monotonic() - pinged > PING_SECONDS:
+                yield ": ping\n\n"
+                pinged = time.monotonic()
+    finally:
+        await pubsub.aclose()  # type: ignore[no-untyped-call]
+
+
+async def changes_since(tenant_id: uuid.UUID, since: datetime) -> tuple[datetime, str] | None:
+    async with tenant_session(tenant_id) as session:
+        rows = (
+            await session.execute(
+                select(Conversation.id, Conversation.updated_at).where(
+                    Conversation.updated_at > since, Conversation.sandbox.is_(False)
                 )
-            ).all()
-            leads = (
-                await session.execute(
-                    select(Lead.conversation_id, Lead.updated_at).where(Lead.updated_at > since)
-                )
-            ).all()
-        if rows or leads:
-            since = max(moment for _, moment in [*rows, *leads])
-            ids = sorted({str(i) for i, _ in [*rows, *leads] if i})
-            data = json.dumps({"conversations": ids, "leads": bool(leads)})
-            yield f"event: change\ndata: {data}\n\n"
-            pinged = time.monotonic()
-        elif time.monotonic() - pinged > PING_SECONDS:
-            yield ": ping\n\n"
-            pinged = time.monotonic()
+            )
+        ).all()
+        leads = (
+            await session.execute(
+                select(Lead.conversation_id, Lead.updated_at).where(Lead.updated_at > since)
+            )
+        ).all()
+    if not rows and not leads:
+        return None
+    latest = max(moment for _, moment in [*rows, *leads])
+    ids = sorted({str(i) for i, _ in [*rows, *leads] if i})
+    return latest, json.dumps({"conversations": ids, "leads": bool(leads)})
 
 
 @router.get("/stream")
@@ -428,6 +443,7 @@ async def set_mode(db: AsyncSession, conversation_id: uuid.UUID, mode: str) -> N
     conversation.mode = mode
     conversation.paused_reason = None
     await db.flush()
+    await poke(conversation.tenant_id)
 
 
 @router.post("/{conversation_id}/takeover")
@@ -484,6 +500,7 @@ async def reply(
         .values(mode="human", paused_reason=None, last_message_at=func.now())
     )
     await db.refresh(message)
+    await poke(principal.tenant_id)
     if step["delivered"]:
         await agent.remember_manager_reply(conversation_id, text)
     return message_out(message, {})

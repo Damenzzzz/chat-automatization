@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.auth.deps import Principal, TenantDb, require_role
+from app.core.poke import poke
 from app.models import Conversation, Customer, Lead
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -91,5 +92,6 @@ async def update_lead(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "lead_not_found")
     lead.status = body.status
     await db.flush()
+    await poke(principal.tenant_id)
     await db.refresh(lead)
     return lead_out(lead)

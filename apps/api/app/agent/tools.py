@@ -7,6 +7,7 @@ from sqlalchemy import select, update
 
 from app.auth.identity import normalize_phone
 from app.catalog.normalize import sku_norm
+from app.core.poke import poke
 from app.core.queue import Queue
 from app.db.session import tenant_session
 from app.llm import Tool, ToolCall
@@ -263,6 +264,7 @@ class ToolBox:
             await session.flush()
             number = str(lead.id)[:8]
             lead_id = lead.id
+        await poke(self.tenant_id)
         await self.notify("lead.created", {"lead_id": str(lead_id), "total_kzt": total})
         context = [product_item(p) for p in products.values()]
         context.append({"type": "lead", "id": str(lead_id), "number": number, "total_kzt": total})
