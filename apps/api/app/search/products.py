@@ -24,6 +24,7 @@ from app.search.log import record_search
 from app.search.types import ProductFilters, ProductHit, SearchML, SearchResult
 
 log = structlog.get_logger()
+SKU_LOOKUP_WORDS = 3
 
 
 async def current_tenant(session: AsyncSession) -> uuid.UUID:
@@ -123,7 +124,8 @@ async def search_products(
     pool = pool[: settings.search_rerank_top]
 
     scores: list[float] | None = None
-    if use_reranker and len(pool) > 1:
+    lookup = bool(exact) and len(query.split()) <= SKU_LOOKUP_WORDS
+    if use_reranker and len(pool) > 1 and not lookup:
         texts = [
             product_text(p.name, p.category, p.description, p.attributes, p.synonyms)
             for p in (products[f.id] for f in pool)

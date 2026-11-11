@@ -162,6 +162,17 @@ class WhatsAppAdapter:
         token = channel.credentials["access_token"]
         return await self.http.download(info["url"], headers={"Authorization": f"Bearer {token}"})
 
+    async def typing(
+        self, channel: ChannelConfig, customer_external_id: str, message_id: str | None = None
+    ) -> None:
+        if message_id:
+            payload = {
+                "status": "read",
+                "message_id": message_id,
+                "typing_indicator": {"type": "text"},
+            }
+            await self._message(channel, payload)
+
     async def acknowledge(self, channel: ChannelConfig, message: IncomingMessage) -> None:
         await self._message(channel, {"status": "read", "message_id": message.external_id})
 

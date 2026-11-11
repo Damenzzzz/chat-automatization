@@ -1,10 +1,13 @@
 import uuid
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models import BotProfile, Tenant
 
 LANG_NAMES = {"ru": "русский", "kk": "казахский"}
@@ -99,6 +102,14 @@ def system_prompt(profile: ShopProfile) -> str:
     return "\n".join(parts)
 
 
+WEEKDAYS = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
+
+
+def local_time(now: datetime | None = None) -> str:
+    moment = (now or datetime.now(UTC)).astimezone(ZoneInfo(get_settings().analytics_timezone))
+    return f"{WEEKDAYS[moment.weekday()]}, {moment:%d.%m.%Y %H:%M}"
+
+
 def _product_line(item: dict[str, Any]) -> str:
     price = money(item["price"]) if item.get("price") is not None else "цена не указана"
     stock = item.get("stock")
@@ -120,7 +131,11 @@ def context_block(
     context: list[dict[str, Any]],
     notes: list[str] | None = None,
 ) -> str:
-    lines = ["[Данные для ответа]", f"Отвечай на {REPLY_LANG.get(lang, 'русском')} языке ({lang})."]
+    lines = [
+        "[Данные для ответа]",
+        f"Отвечай на {REPLY_LANG.get(lang, 'русском')} языке ({lang}).",
+        f"Сейчас {local_time()} по времени магазина.",
+    ]
     if intent:
         lines.append(f"Намерение покупателя: {intent}.")
     known = {k: v for k, v in (slots or {}).items() if v is not None}

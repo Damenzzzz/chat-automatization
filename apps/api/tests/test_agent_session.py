@@ -1,5 +1,8 @@
+from datetime import UTC, datetime
+
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 
+from app.agent.prompt import context_block, local_time
 from app.agent.respond import dialog_length
 from app.agent.session import SESSION_GAP, new_session
 from app.channels.staff import staff_text
@@ -37,3 +40,9 @@ def test_staff_text_links_to_dialog() -> None:
     assert "оптовый заказ" in text
     assert text.endswith("/dialogs?id=c1")
     assert staff_text("unknown", {}) is None
+
+
+def test_bot_knows_shop_local_time() -> None:
+    moment = datetime(2026, 11, 10, 18, 41, tzinfo=UTC)
+    assert local_time(moment) == "вторник, 10.11.2026 23:41"
+    assert "Сейчас " in context_block(lang="ru", intent=None, slots=None, context=[])

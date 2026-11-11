@@ -31,6 +31,7 @@ from app.billing.ledger import charge_reply, estimated_reply_price, get_balance,
 from app.channels.outgoing import mentioned_products, product_card
 from app.channels.types import ChannelError, Media, OutgoingMessage, ProductCard
 from app.core.config import get_settings
+from app.core.poke import poke
 from app.core.queue import Queue
 from app.db.session import tenant_session
 from app.llm import LLM, LLMError, ToolCall
@@ -132,6 +133,8 @@ class AgentNodes:
                     .where(Conversation.id == conversation_id)
                     .values(last_message_at=func.now())
                 )
+        if not state.get("sandbox"):
+            await poke(state["tenant_id"])
         if duplicate:
             log.warning("agent.turn_repeated", conversation_id=str(conversation_id), was=duplicate)
             return {
@@ -276,7 +279,8 @@ class AgentNodes:
         channel_id, customer = state.get("channel_id"), state.get("customer_external_id")
         if typing is None or not channel_id or not customer:
             return
-        task = asyncio.ensure_future(typing(uuid.UUID(channel_id), customer))
+        shown = typing(uuid.UUID(channel_id), customer, state.get("external_id"))
+        task = asyncio.ensure_future(shown)
         self.background.add(task)
         task.add_done_callback(self.background.discard)
 
@@ -656,6 +660,8 @@ class AgentNodes:
                         answer=reply,
                     )
                 )
+        if not state.get("sandbox"):
+            await poke(state["tenant_id"])
         if alert:
             await self.deps.queue.enqueue(NOTIFY_OWNER, state["tenant_id"], alert)
         return {"trace": trace}
