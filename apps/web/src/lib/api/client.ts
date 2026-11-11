@@ -6,7 +6,7 @@ export type Schemas = components["schemas"];
 
 let refreshing: Promise<boolean> | null = null;
 
-function refreshSession(): Promise<boolean> {
+export function refreshSession(): Promise<boolean> {
   refreshing ??= fetch("/auth/refresh", { method: "POST" })
     .then((response) => response.ok)
     .catch(() => false)
