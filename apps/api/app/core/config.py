@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     otp_ttl: int = 10 * 60
     otp_max_attempts: int = 5
     otp_max_requests: int = 3
+    otp_ip_requests: int = 20
 
     smtp_host: str | None = None
     smtp_port: int = 587

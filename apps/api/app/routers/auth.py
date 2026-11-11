@@ -1,11 +1,12 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.cookies import (
+    ACCESS_COOKIE,
     REFRESH_COOKIE,
     clear_auth_cookies,
     set_access_cookie,
@@ -22,11 +23,15 @@ from app.auth.otp import (
     WrongCodeError,
 )
 from app.auth.senders import CodeSender, SenderUnavailableError
-from app.auth.tokens import AccessClaims, RefreshStore, create_access_token
+from app.auth.tokens import AccessClaims, RefreshStore, create_access_token, revoke_access_token
 from app.auth.users import UserRef, create_owner, find_user, load_user
 from app.core.config import get_settings
+from app.core.net import client_ip
+from app.core.ratelimit import limit
+from app.core.redis import get_redis
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+OTP_WINDOW = 600
 
 OTP_ERRORS: dict[type[OtpError], tuple[int, str]] = {
     TooManyRequestsError: (status.HTTP_429_TOO_MANY_REQUESTS, "too_many_requests"),
@@ -75,9 +80,12 @@ async def start_session(response: Response, user: UserRef, store: RefreshStore) 
 @router.post("/request-code", status_code=status.HTTP_202_ACCEPTED)
 async def request_code(
     body: IdentityIn,
+    request: Request,
     otp: Annotated[OtpService, Depends(get_otp)],
     sender: Annotated[CodeSender, Depends(get_code_sender)],
 ) -> CodeSentOut:
+    settings = get_settings()
+    await limit(get_redis(), f"otp:ip:{client_ip(request)}", settings.otp_ip_requests, OTP_WINDOW)
     try:
         code = await otp.issue(body.identity)
     except OtpError as exc:
@@ -86,7 +94,6 @@ async def request_code(
         await sender.send(body.identity, code)
     except SenderUnavailableError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "channel_unavailable") from exc
-    settings = get_settings()
     show = settings.demo_enabled and settings.env != "prod"
     return CodeSentOut(sent=True, demo_code=code if show else None)
 
@@ -94,10 +101,13 @@ async def request_code(
 @router.post("/verify")
 async def verify(
     body: VerifyIn,
+    request: Request,
     response: Response,
     otp: Annotated[OtpService, Depends(get_otp)],
     store: Annotated[RefreshStore, Depends(get_refresh_store)],
 ) -> SessionOut:
+    attempts = get_settings().otp_ip_requests * 3
+    await limit(get_redis(), f"otp-verify:ip:{client_ip(request)}", attempts, OTP_WINDOW)
     identity = body.identity
     user = await find_user(identity)
     signup = body.signup if user is None else None
@@ -139,7 +149,9 @@ async def logout(
     response: Response,
     store: Annotated[RefreshStore, Depends(get_refresh_store)],
     token: Annotated[str | None, Cookie(alias=REFRESH_COOKIE)] = None,
+    access: Annotated[str | None, Cookie(alias=ACCESS_COOKIE)] = None,
 ) -> None:
     if token:
         await store.revoke(token)
+    await revoke_access_token(get_redis(), access, get_settings())
     clear_auth_cookies(response)

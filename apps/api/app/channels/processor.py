@@ -15,7 +15,7 @@ from app.channels.store import load_channel
 from app.channels.types import ChannelConfig, ChannelError, IncomingMessage, OutgoingMessage
 from app.core.queue import Queue
 from app.db.session import tenant_session
-from app.models import Conversation, Customer, Message
+from app.models import Conversation, Customer, Message, Tenant
 
 log = structlog.get_logger()
 
@@ -99,6 +99,12 @@ async def open_conversation(channel: ChannelConfig, message: IncomingMessage) ->
     return conversation_id
 
 
+async def suspended(tenant_id: uuid.UUID) -> bool:
+    async with tenant_session(tenant_id) as session:
+        status = await session.scalar(select(Tenant.status).where(Tenant.id == tenant_id))
+    return status == "suspended"
+
+
 class Processor:
     def __init__(self, redis: Any, queue: Queue, agent: Agent, outbound: Outbound) -> None:
         self.redis = redis
@@ -114,7 +120,7 @@ class Processor:
         if head is None:
             return "empty"
         channel = await load_channel(uuid.UUID(channel_id))
-        if channel is None or channel.status == "disabled":
+        if channel is None or channel.status == "disabled" or await suspended(channel.tenant_id):
             await self.redis.delete(buffer)
             return "skipped"
         conversation_id = await open_conversation(

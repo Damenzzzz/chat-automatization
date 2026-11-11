@@ -3,19 +3,20 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import CursorResult, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.cookies import set_access_cookie
+from app.auth.cookies import ACCESS_COOKIE, set_access_cookie
 from app.auth.deps import CurrentUser, Principal, require_role
-from app.auth.tokens import AccessClaims, create_access_token
+from app.auth.tokens import AccessClaims, create_access_token, revoke_access_token
 from app.billing.ledger import get_balance, lock_ledger
 from app.billing.pricing import load_pricing
 from app.cli import SATUSHY_TENANT_ID
 from app.core.config import get_settings
+from app.core.redis import get_redis
 from app.db.session import tenant_session
 from app.models import AuditLog, Conversation, LedgerEntry, Payment, PricingSettings, Tenant
 
@@ -186,6 +187,31 @@ class ImpersonationOut(BaseModel):
     tenant_name: str
 
 
+class TenantStatusIn(BaseModel):
+    status: Literal["active", "suspended"]
+
+
+@router.put("/tenants/{tenant_id}/status")
+async def set_tenant_status(
+    tenant_id: uuid.UUID, body: TenantStatusIn, admin: Admin
+) -> dict[str, str]:
+    if tenant_id == SATUSHY_TENANT_ID:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "internal_tenant")
+    async with tenant_session(tenant_id) as session:
+        tenant = await session.scalar(select(Tenant).where(Tenant.id == tenant_id))
+        if tenant is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "tenant_not_found")
+        tenant.status = body.status
+        session.add(
+            AuditLog(
+                tenant_id=tenant_id,
+                actor_id=admin.user_id,
+                action=f"tenant.{body.status}",
+            )
+        )
+    return {"status": body.status}
+
+
 @router.post("/impersonate/{tenant_id}")
 async def impersonate(tenant_id: uuid.UUID, admin: Admin, response: Response) -> ImpersonationOut:
     async with tenant_session(tenant_id) as session:
@@ -208,9 +234,14 @@ async def impersonate(tenant_id: uuid.UUID, admin: Admin, response: Response) ->
 
 
 @router.delete("/impersonate", status_code=status.HTTP_204_NO_CONTENT)
-async def stop_impersonation(principal: CurrentUser, response: Response) -> None:
+async def stop_impersonation(
+    principal: CurrentUser,
+    response: Response,
+    access: Annotated[str | None, Cookie(alias=ACCESS_COOKIE)] = None,
+) -> None:
     if principal.actor_id is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_impersonating")
+    await revoke_access_token(get_redis(), access, get_settings())
     async with tenant_session(principal.tenant_id) as session:
         session.add(
             AuditLog(

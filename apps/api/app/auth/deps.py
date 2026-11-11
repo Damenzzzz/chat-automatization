@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.cookies import ACCESS_COOKIE
 from app.auth.otp import OtpService
 from app.auth.senders import CodeSender, build_code_sender
-from app.auth.tokens import InvalidTokenError, RefreshStore, decode_access_token
+from app.auth.tokens import InvalidTokenError, RefreshStore, decode_access_token, is_revoked
 from app.auth.users import load_user
 from app.core.config import get_settings
 from app.core.redis import get_redis
@@ -72,10 +72,14 @@ async def current_user(
         claims = decode_access_token(token, get_settings())
     except InvalidTokenError as exc:
         raise _unauthorized() from exc
+    if await is_revoked(get_redis(), claims):
+        raise _unauthorized()
 
     user = await load_user(claims.user_id, claims.tenant_id)
     if user is None or not user.is_active:
         raise _unauthorized()
+    if user.suspended and user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "shop_suspended")
     if claims.impersonating:
         if user.role != "admin":
             raise _unauthorized()

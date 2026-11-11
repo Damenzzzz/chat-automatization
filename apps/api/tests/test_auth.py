@@ -1,7 +1,9 @@
 import asyncio
 
+import pytest
 from httpx import AsyncClient
 from redis.asyncio import Redis
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.auth.cookies import ACCESS_COOKIE, REFRESH_COOKIE
@@ -28,7 +30,7 @@ async def test_full_code_cycle(
     }
 
     set_cookie = " ".join(response.headers.get_list("set-cookie")).lower()
-    assert set_cookie.count("httponly") == 2
+    assert set_cookie.count("httponly") == 3
     claims = decode_access_token(client.cookies[ACCESS_COOKIE], get_settings())
     assert claims.user_id == user_id and claims.tenant_id == tenant_id
 
@@ -111,3 +113,44 @@ async def test_unknown_user_needs_signup(client: AsyncClient, sender: FakeSender
     response = await client.post("/auth/verify", json={"phone": phone, "code": sender.codes[phone]})
     assert response.status_code == 409
     assert response.json()["detail"] == "signup_required"
+
+
+async def test_logout_revokes_access_token(
+    client: AsyncClient, sender: FakeSender, owner_engine: AsyncEngine
+) -> None:
+    _, _, phone = await create_user(owner_engine)
+    await login(client, sender, phone)
+    stolen = client.cookies[ACCESS_COOKIE]
+    assert (await client.get("/me")).status_code == 200
+
+    await client.post("/auth/logout")
+    client.cookies.set(ACCESS_COOKIE, stolen)
+
+    assert (await client.get("/me")).status_code == 401
+
+
+async def test_suspended_shop_is_locked_out(
+    client: AsyncClient, sender: FakeSender, owner_engine: AsyncEngine
+) -> None:
+    tenant_id, _, phone = await create_user(owner_engine)
+    await login(client, sender, phone)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE tenants SET status = 'suspended' WHERE id = :t"), {"t": tenant_id}
+        )
+
+    response = await client.get("/me")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "shop_suspended"
+
+
+async def test_code_requests_are_limited_per_ip(
+    client: AsyncClient, sender: FakeSender, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "otp_ip_requests", 2)
+    statuses = [
+        (await client.post("/auth/request-code", json={"phone": random_phone()})).status_code
+        for _ in range(3)
+    ]
+    assert statuses == [202, 202, 429]

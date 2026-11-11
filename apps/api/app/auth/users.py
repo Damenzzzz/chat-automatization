@@ -14,6 +14,7 @@ class UserRef:
     tenant_id: uuid.UUID
     role: str
     is_active: bool
+    suspended: bool = False
 
 
 async def find_user(identity: Identity) -> UserRef | None:
@@ -31,8 +32,17 @@ async def find_user(identity: Identity) -> UserRef | None:
 
 async def load_user(user_id: uuid.UUID, tenant_id: uuid.UUID) -> UserRef | None:
     async with tenant_session(tenant_id) as session:
-        user = await session.scalar(select(User).where(User.id == user_id))
-    return UserRef(user.id, user.tenant_id, user.role, user.is_active) if user else None
+        row = (
+            await session.execute(
+                select(User, Tenant.status)
+                .join(Tenant, Tenant.id == User.tenant_id)
+                .where(User.id == user_id)
+            )
+        ).first()
+    if row is None:
+        return None
+    user, status = row
+    return UserRef(user.id, user.tenant_id, user.role, user.is_active, status == "suspended")
 
 
 async def create_owner(
