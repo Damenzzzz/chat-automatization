@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     analytics_timezone: str = "Asia/Almaty"
     bot_replies_per_hour: int = 30
     human_idle_release_hours: int = 12
+    conversation_idle_close_days: int = 30
+    sandbox_keep_days: int = 7
+    search_log_keep_days: int = 90
+    lead_reminder_hours: int = 2
     unanswered_group_threshold: float = 0.85
 
     demo_enabled: bool = False

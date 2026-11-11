@@ -16,6 +16,11 @@ def staff_text(event: str, payload: Mapping[str, Any]) -> str | None:
     dialog = f"{web}/dialogs?id={payload.get('conversation_id')}"
     if event == "lead.created":
         return f"Новая заявка на {money(int(payload.get('total_kzt') or 0))}.\n{web}/leads"
+    if event == "lead.stale":
+        total = money(int(payload.get("total_kzt") or 0))
+        return (
+            f"Заявка на {total} ждёт ответа уже {payload.get('hours')} ч.\n{web}/leads?status=new"
+        )
     if event == "handoff":
         reason = str(payload.get("reason") or "").strip()[:200]
         return f"Бот передал диалог менеджеру{': ' + reason if reason else ''}.\n{dialog}"
