@@ -52,8 +52,27 @@ async def test_retries_while_models_load() -> None:
         return _embed_ok(request)
 
     client, sleeps = _client(handler)
-    assert len(await client.embed(["пион"], "query")) == 1
+    assert len(await client.embed(["пион"], "document")) == 1
     assert len(calls) == 3 and len(sleeps) == 2
+
+
+async def test_query_gives_up_fast_and_is_cached() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) <= 2:
+            return httpx.Response(503, json={"detail": "models_loading"})
+        return _embed_ok(request)
+
+    client, sleeps = _client(handler)
+    with pytest.raises(MLError):
+        await client.embed(["пион"], "query")
+    assert len(calls) == 2 and len(sleeps) == 1
+
+    first = await client.embed(["пион"], "query")
+    assert await client.embed(["пион"], "query") == first
+    assert len(calls) == 3
 
 
 async def test_client_error_is_not_retried() -> None:

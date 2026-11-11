@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from functools import lru_cache
@@ -13,6 +14,9 @@ from app.core.config import get_settings
 log = structlog.get_logger()
 
 EMBEDDING_DIM = 1024
+SEARCH_TIMEOUT = 15.0
+QUERY_CACHE_TTL = 3600.0
+QUERY_CACHE_SIZE = 2000
 Kind = Literal["query", "document"]
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -55,6 +59,7 @@ class MLClient:
         self._sleep = sleep
         self._http: httpx.AsyncClient | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._queries: dict[str, tuple[float, list[float]]] = {}
 
     def _client(self) -> httpx.AsyncClient:
         loop = asyncio.get_running_loop()
@@ -70,39 +75,59 @@ class MLClient:
         path: str,
         payload: dict[str, Any] | None = None,
         files: dict[str, tuple[str, bytes, str]] | None = None,
+        *,
+        fast: bool = False,
     ) -> dict[str, Any]:
         http = self._client()
-        for attempt in range(self.max_retries + 1):
+        retries = min(self.max_retries, 1) if fast else self.max_retries
+        timeout = min(self.timeout, SEARCH_TIMEOUT) if fast else self.timeout
+        for attempt in range(retries + 1):
             try:
-                response = await http.post(path, json=payload, files=files)
+                response = await http.post(path, json=payload, files=files, timeout=timeout)
                 response.raise_for_status()
                 body: dict[str, Any] = response.json()
                 return body
             except httpx.HTTPError as exc:
-                if not _retryable(exc) or attempt == self.max_retries:
+                if not _retryable(exc) or attempt == retries:
                     raise MLError(f"{path}: {exc!r}") from exc
                 delay = min(10.0, 0.5 * 2**attempt) * (0.5 + random.random() / 2)  # noqa: S311
                 log.info("ml.retry", path=path, attempt=attempt, delay=round(delay, 2))
                 await self._sleep(delay)
         raise AssertionError("unreachable")
 
+    def _cached(self, text: str) -> list[float] | None:
+        hit = self._queries.get(text)
+        if hit is None or hit[0] < time.monotonic():
+            return None
+        return hit[1]
+
+    def _remember(self, text: str, vector: list[float]) -> None:
+        if len(self._queries) >= QUERY_CACHE_SIZE:
+            self._queries.pop(next(iter(self._queries)))
+        self._queries[text] = (time.monotonic() + QUERY_CACHE_TTL, vector)
+
     async def embed(self, texts: list[str], kind: Kind) -> list[list[float]]:
+        query = kind == "query" and len(texts) == 1
+        if query and (cached := self._cached(texts[0])) is not None:
+            return [cached]
         vectors: list[list[float]] = []
         for start in range(0, len(texts), self.batch_size):
             batch = texts[start : start + self.batch_size]
-            body = await self._post("/embed", {"texts": batch, "kind": kind})
+            body = await self._post("/embed", {"texts": batch, "kind": kind}, fast=query)
             got = body.get("embeddings", [])
             if len(got) != len(batch) or any(len(v) != EMBEDDING_DIM for v in got):
                 raise MLError(
                     f"/embed: ожидалось {len(batch)} векторов размерности {EMBEDDING_DIM}"
                 )
             vectors.extend(got)
+        if query:
+            self._remember(texts[0], vectors[0])
         return vectors
 
     async def rerank(self, query: str, documents: list[str]) -> list[float]:
         if not documents:
             return []
-        body = await self._post("/rerank", {"query": query, "documents": documents})
+        body = await self._post("/rerank", {"query": query, "documents": documents}, fast=True)
         scores: list[float] = body.get("scores", [])
         if len(scores) != len(documents):
             raise MLError("/rerank: число оценок не совпадает с числом документов")
