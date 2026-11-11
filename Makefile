@@ -8,7 +8,7 @@ API := cd apps/api &&
 ML := cd apps/ml &&
 WEB := cd apps/web &&
 
-.PHONY: help up down logs ps migrate seed admin eval test lint fmt install api-types
+.PHONY: help up down logs ps migrate seed admin eval test lint fmt install api-types backup
 
 help: ## Список команд
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -65,3 +65,8 @@ fmt: ## Автоформат и автоисправления
 	$(API) uv run ruff format . && uv run ruff check --fix .
 	$(ML) uv run ruff format . && uv run ruff check --fix .
 	$(WEB) npm run format
+
+backup: ## Дамп базы в backups/ (нужен make up); восстановление — pg_restore
+	@mkdir -p backups
+	$(COMPOSE) exec -T postgres sh -c 'pg_dump -Fc -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/satushy-$$(date +%Y%m%d-%H%M%S).dump
+	@ls -lh backups | tail -1

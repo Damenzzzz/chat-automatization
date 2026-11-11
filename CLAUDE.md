@@ -35,6 +35,7 @@ make test               # pytest api + ml; тесты api пересоздают
 make lint               # ruff, mypy, eslint, prettier, tsc
 make api-types          # типы клиента из OpenAPI работающего api
 make fmt                # автоформат
+make backup             # дамп базы в backups/ (нужен make up)
 make down
 ```
 
@@ -57,6 +58,7 @@ make down
 - В эндпоинтах: `CurrentUser`, `require_role(...)`, `TenantDb` из `app/auth/deps.py`. `TenantDb` уже выставил `app.tenant_id` — отдельно `tenant_session` в роутерах не нужен.
 - Поиск пользователя до входа — только через SQL-функцию `auth_find_user` (SECURITY DEFINER), RLS не обходить иначе.
 - `ENV` обязателен (`dev` | `test` | `prod`); при `prod` сервис не стартует с `JWT_SECRET` из `.env.example`. `/docs` в проде выключен, готовность — `GET /ready`. Решения — [ADR 0009](docs/adr/0009-safe-defaults.md).
+- Выход отзывает access-токен (`jti` в `auth:revoked:*`), `tenants.status = suspended` → 403 `shop_suspended` и молчащий бот (`PUT /admin/tenants/{id}/status`). Кука `satushy_session` — только признак сессии для `apps/web/src/proxy.ts`. Решения — [ADR 0011](docs/adr/0011-sessions-and-housekeeping.md).
 - IP клиента для лимитов — только `client_ip` из `app/core/net.py`, лимиты — `limit` из `app/core/ratelimit.py`. `X-Forwarded-For` напрямую не читать.
 - Админ Satushy живёт во внутреннем магазине `SATUSHY_TENANT_ID` (`app/cli.py`). `POST /admin/impersonate/{tenant_id}` → права владельца клиента; старт, стоп и каждый не-GET запрос пишутся в `audit_log` с `actor_id`.
 
@@ -114,12 +116,15 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Путь сообщения: вебхук проверяет подпись → `Gateway.accept` (SETNX `dedup:*` на 24 часа, буфер, задача ARQ `flush_customer` через 1,5 с) → `Processor.flush` (последний `seq`, блокировка диалога, склейка) → граф. В режиме human сообщение сохраняется и уходит `notify_manager`.
 - `notify_manager` → `app/channels/staff.py`: Telegram всем активным сотрудникам с привязанным чатом (заявка, передача диалога, сбой хода, ожидающий покупатель — не чаще раза в 10 минут на диалог). После трёх неудач `Processor.give_up` отвечает покупателю шаблоном и переводит диалог менеджеру.
 - Cron `release_idle` (раз в 10 минут): диалог у менеджера без сообщений `HUMAN_IDLE_RELEASE_HOURS` часов возвращается боту, пауза `rate_limit` снимается через час (SQL-функция `release_idle_conversations`).
-- Узел `gate` показывает покупателю «печатает» (`Outbound.typing`, пока только Telegram). HTTP-клиенты каналов и ML общие на процесс.
+- Cron воркера: `sweep_inbox` (буферы без обработки 90 с), `remind_leads` (заявка `new` старше `LEAD_REMINDER_HOURS`), `housekeeping` (закрытие диалогов через 30 дней тишины, удаление старой песочницы и их чекпоинтов, чистка `search_log`). Межарендные выборки — только SQL-функции SECURITY DEFINER из миграций 0017 и 0019.
+- Блокировка диалога 120 с, её продлевает `keep_locked`; не полагаться на то, что ход короче TTL.
+- Любое изменение диалога или заявки вне этих мест должно вызвать `poke(tenant_id)` (`app/core/poke.py`), иначе кабинет увидит его только через 5 секунд.
+- Узел `gate` показывает покупателю «печатает» (`Outbound.typing`: Telegram и WhatsApp). HTTP-клиенты каналов и ML общие на процесс.
 - Текст покупателя не класть в аргументы ARQ и логи. Токены не писать в ошибки: `ChannelHttp` убирает URL, логи httpx выключены (в URL Telegram лежит токен).
 - Карточки: только товары, упомянутые в ответе (до 3); цена и фото читаются из БД в узле `send`. Ошибка отправки не роняет ход: `delivered = false` и `error` в trace.
 - Подключение (только owner): `POST /channels/telegram {token}` (getMe + setWebhook с `secret_token`), `POST /channels/whatsapp`, `POST /channels/web {domain}` (выдаёт `snippet`), `POST /channels/{id}/check`, `GET /channels`.
 - Вебхуки: `/webhooks/telegram/{id}` (заголовок `X-Telegram-Bot-Api-Secret-Token`), `/webhooks/whatsapp/{id}` (GET — `hub.verify_token`, POST — `X-Hub-Signature-256` по `app_secret`).
-- Виджет: `POST /widget/{key}/messages`, `GET /widget/{key}/stream` (SSE на Redis Streams), заголовок `X-Widget-Session`; CORS только для `channels.domain` и его `www`. Лимиты: 20 в минуту на сессию, 60 на IP, `WIDGET_CHANNEL_MESSAGES_PER_HOUR` на канал. Скрипт — `apps/web/public/widget.js`.
+- Виджет: `POST /widget/{key}/messages`, `GET /widget/{key}/stream` (SSE на Redis Streams), заголовок `X-Widget-Session` с токеном из `POST /widget/{key}/session` (подписан сервером, самодельные отклоняются); CORS только для `channels.domain` и его `www`. Лимиты: 20 в минуту на сессию, 60 на IP, `WIDGET_CHANNEL_MESSAGES_PER_HOUR` на канал. Скрипт — `apps/web/public/widget.js`.
 - Голос: узел `transcribe` скачивает аудио через адаптер, шлёт в ML, кладёт расшифровку в `messages.content` и `messages.media.items[]`. Не распознали → `voice_failed`, бот просит написать текстом. В `apps/ml` базовая модель определяет язык, `kk` уходит в `KK_ASR_MODEL`; модель в формате Transformers при старте конвертируется в CTranslate2 (`/models/ct2`). `av<18`: faster-whisper 1.2 несовместим с новее. `ML_ASR=fake` — без моделей.
 - Env: `FERNET_KEY` обязателен для ключей каналов (иначе 503 `encryption_not_configured`), `PUBLIC_API_URL` должен быть HTTPS для Telegram (локально — адрес туннеля), `WHATSAPP_GRAPH_VERSION`.
 - Instagram — только заглушка адаптера, подключим после App Review.
