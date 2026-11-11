@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from pathlib import PurePath
 from typing import Annotated
@@ -103,7 +104,8 @@ async def load_preview(job: IngestJob, storage: Storage) -> tuple[list[str], lis
     if not job.file_key or not job.file_type:
         raise HTTPException(status.HTTP_409_CONFLICT, "job_has_no_file")
     try:
-        return preview(await storage.get(job.file_key), job.file_type)
+        data = await storage.get(job.file_key)
+        return await asyncio.to_thread(preview, data, job.file_type)
     except FileFormatError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 

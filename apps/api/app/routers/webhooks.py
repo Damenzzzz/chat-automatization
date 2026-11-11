@@ -84,7 +84,7 @@ async def telegram_webhook(
 ) -> dict[str, bool]:
     channel = await channel_of_type(channel_id, "telegram")
     expected = channel.webhook_secret
-    if not expected or not secret or not secrets.compare_digest(secret, expected):
+    if not expected or not secret or not secrets.compare_digest(secret.encode(), expected.encode()):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid_secret")
     body = await read_body(request)
     if await handle_owner_link(gateway, channel, body):
@@ -102,7 +102,11 @@ async def whatsapp_verify(
 ) -> str:
     channel = await channel_of_type(channel_id, "whatsapp")
     expected = channel.webhook_secret
-    if mode != "subscribe" or not expected or not secrets.compare_digest(token, expected):
+    if (
+        mode != "subscribe"
+        or not expected
+        or not secrets.compare_digest(token.encode(), expected.encode())
+    ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "verification_failed")
     return challenge
 
