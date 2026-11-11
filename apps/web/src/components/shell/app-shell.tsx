@@ -27,6 +27,7 @@ import { api } from "@/lib/api/client";
 import { ApiError, errorText, unwrap } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 
+import { useAttention } from "./attention";
 import { CommandPalette, openPalette } from "./command-palette";
 import { InboxStream } from "./inbox-stream";
 import { SessionProvider, useSession } from "./session";
@@ -42,16 +43,20 @@ const NAV: Item[] = [
   { href: "/bot", label: "Бот и песочница", icon: Bot },
   { href: "/channels", label: "Каналы", icon: Plug, ownerOnly: true },
   { href: "/balance", label: "Баланс", icon: Wallet, ownerOnly: true },
-  { href: "/settings", label: "Настройки", icon: Settings, ownerOnly: true },
+  { href: "/settings", label: "Настройки", icon: Settings },
 ];
 
-function useWaiting(): number {
+function useWaitingCount(): number | undefined {
   const { data } = useSWR(
     "/conversations?counts",
     () => unwrap(api.GET("/conversations", { params: { query: { limit: 1 } } })),
     { refreshInterval: 60_000 },
   );
-  return data?.counts.waiting ?? 0;
+  return data?.counts.waiting;
+}
+
+function useWaiting(): number {
+  return useWaitingCount() ?? 0;
 }
 
 function useNewLeads(): number {
@@ -381,7 +386,9 @@ function Banners() {
 function Frame({ children }: { children: ReactNode }) {
   const { error, retry } = useSession();
   const pathname = usePathname();
-  useTitleCounter(useWaiting());
+  const waiting = useWaitingCount();
+  useTitleCounter(waiting ?? 0);
+  useAttention(waiting);
   return (
     <div className="min-h-svh bg-canvas lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
       <a

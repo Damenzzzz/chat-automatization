@@ -25,7 +25,7 @@ const PAGES: (Entry & { ownerOnly?: boolean })[] = [
   { group: "Разделы", label: "Товары", href: "/products" },
   { group: "Разделы", label: "Бот и песочница", href: "/bot" },
   { group: "Разделы", label: "Каналы", href: "/channels", ownerOnly: true },
-  { group: "Разделы", label: "Настройки", href: "/settings", ownerOnly: true },
+  { group: "Разделы", label: "Настройки", href: "/settings" },
   { group: "Действия", label: "Пополнить баланс", href: "/balance", ownerOnly: true },
   { group: "Действия", label: "Загрузить новый прайс", href: "/products?import=1" },
   { group: "Действия", label: "Диалоги, которые ждут ответа", href: "/dialogs?filter=human" },

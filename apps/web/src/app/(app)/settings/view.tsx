@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from "swr";
 
 import { useSession } from "@/components/shell/session";
 import { BusinessForm } from "@/components/shop/business-form";
+import { setAlerts, useAlertsEnabled } from "@/components/shell/attention";
 import { TemplatesForm } from "@/components/shop/templates-form";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/field";
@@ -181,47 +182,95 @@ function TelegramNotifications() {
   );
 }
 
+function BrowserAlerts() {
+  const enabled = useAlertsEnabled();
+  const [denied, setDenied] = useState(false);
+
+  async function enable() {
+    if ("Notification" in window && Notification.permission !== "granted") {
+      setDenied((await Notification.requestPermission()) === "denied");
+    }
+    setAlerts(true);
+  }
+
+  return (
+    <div className="flex max-w-2xl flex-col gap-3">
+      <div>
+        {enabled ? (
+          <Button variant="secondary" onClick={() => setAlerts(false)}>
+            Выключить звук и уведомления
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={() => void enable()}>
+            Включить звук и уведомления
+          </Button>
+        )}
+      </div>
+      <p role="status" className="text-sm text-steel">
+        {enabled
+          ? "Включено на этом устройстве. Работает, пока кабинет открыт во вкладке."
+          : "Выключено. Настройка действует только на этом устройстве."}
+        {denied && " Браузер запретил уведомления: останется только звук."}
+      </p>
+    </div>
+  );
+}
+
 export function SettingsView() {
-  const { shop } = useSession();
+  const { shop, isOwner } = useSession();
   const { mutate } = useSWRConfig();
   return (
     <Page>
-      <PageHeader title="Настройки">Данные магазина, шаблоны, команда и уведомления.</PageHeader>
-      <Section title="Магазин">
-        {shop ? (
-          <BusinessForm
-            key={shop.id}
-            shop={shop}
-            saveLabel="Сохранить"
-            showSaved
-            onDone={(saved) => void mutate("/shop", saved, { revalidate: false })}
-          />
-        ) : (
-          <Loading />
-        )}
-      </Section>
-      <Section
-        title="Шаблоны ответов"
-        description="Готовые ответы появятся кнопками под полем сообщения в диалогах."
-      >
-        {shop ? (
-          <TemplatesForm
-            key={shop.id}
-            templates={shop.reply_templates}
-            onDone={(saved) => void mutate("/shop", saved, { revalidate: false })}
-          />
-        ) : (
-          <Loading />
-        )}
-      </Section>
-      <Section title="Команда">
-        <Team />
-      </Section>
+      <PageHeader title="Настройки">
+        {isOwner
+          ? "Данные магазина, шаблоны, команда и уведомления."
+          : "Уведомления о покупателях, которые ждут ответа."}
+      </PageHeader>
+      {isOwner && (
+        <>
+          <Section title="Магазин">
+            {shop ? (
+              <BusinessForm
+                key={shop.id}
+                shop={shop}
+                saveLabel="Сохранить"
+                showSaved
+                onDone={(saved) => void mutate("/shop", saved, { revalidate: false })}
+              />
+            ) : (
+              <Loading />
+            )}
+          </Section>
+          <Section
+            title="Шаблоны ответов"
+            description="Готовые ответы появятся кнопками под полем сообщения в диалогах."
+          >
+            {shop ? (
+              <TemplatesForm
+                key={shop.id}
+                templates={shop.reply_templates}
+                onDone={(saved) => void mutate("/shop", saved, { revalidate: false })}
+              />
+            ) : (
+              <Loading />
+            )}
+          </Section>
+          <Section title="Команда">
+            <Team />
+          </Section>
+        </>
+      )}
       <Section
         title="Уведомления в Telegram"
         description="Напишем, когда покупатель ждёт менеджера, пришла заявка или на балансе мало денег."
       >
         <TelegramNotifications />
+      </Section>
+      <Section
+        title="Уведомления в браузере"
+        description="Звук и всплывающее уведомление, когда новый покупатель ждёт ответа менеджера."
+      >
+        <BrowserAlerts />
       </Section>
     </Page>
   );

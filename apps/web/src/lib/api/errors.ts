@@ -32,6 +32,7 @@ const MESSAGES: Record<string, string> = {
   no_previous_version: "Предыдущей версии нет.",
   telegram_not_connected: "Сначала подключите Telegram-бота на странице «Каналы».",
   cannot_remove_self: "Нельзя удалить самого себя.",
+  shop_suspended: "Магазин заблокирован. Напишите в поддержку Satushy.",
   nothing_to_answer: "В диалоге пока нет вопроса покупателя, на который можно ответить.",
   demo_read_only:
     "В демо-магазине это отключено. Подключите свой магазин, чтобы настроить всё под себя.",

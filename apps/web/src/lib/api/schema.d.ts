@@ -226,6 +226,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/tenants/{tenant_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Tenant Status */
+        put: operations["set_tenant_status_admin_tenants__tenant_id__status_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/impersonate/{tenant_id}": {
         parameters: {
             query?: never;
@@ -937,6 +954,23 @@ export interface paths {
         put?: never;
         /** Whatsapp Webhook */
         post: operations["whatsapp_webhook_webhooks_whatsapp__channel_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/widget/{public_key}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Session */
+        post: operations["open_session_widget__public_key__session_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2037,6 +2071,14 @@ export interface components {
             /** Expires In */
             expires_in: number;
         };
+        /** TenantStatusIn */
+        TenantStatusIn: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "suspended";
+        };
         /** TopQueryOut */
         TopQueryOut: {
             /** Query */
@@ -2321,6 +2363,7 @@ export interface operations {
             path?: never;
             cookie?: {
                 satushy_refresh?: string | null;
+                satushy_access?: string | null;
             };
         };
         requestBody?: never;
@@ -2598,6 +2641,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TopupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_tenant_status_admin_tenants__tenant_id__status_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantStatusIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -4130,6 +4212,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_session_widget__public_key__session_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Origin?: string | null;
+            };
+            path: {
+                public_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
