@@ -12,7 +12,14 @@ from app.channels.gateway import FLUSH
 from app.channels.outbound import Outbound
 from app.channels.processor import Processor
 from app.channels.types import OutgoingMessage, ProductCard
-from app.channels.web import WebAdapter, customer_id, origin_allowed, stream_key
+from app.channels.web import (
+    WebAdapter,
+    customer_id,
+    origin_allowed,
+    sign_session,
+    stream_key,
+)
+from app.core.config import get_settings
 from app.llm.fake import FakeLLM
 from app.routers import widget
 from app.routers.channels import normalize_domain
@@ -21,7 +28,7 @@ from tests.channel_helpers import make_channel
 from tests.conftest import RecordingQueue
 
 ORIGIN = "https://pion.kz"
-SESSION = "session-token-0123456789abcd"
+SESSION = sign_session("session-token-0123456789abcd")
 HEADERS = {"Origin": ORIGIN, "X-Widget-Session": SESSION}
 
 
@@ -146,7 +153,15 @@ async def test_unknown_key_is_404(client: AsyncClient) -> None:
     assert response.status_code == 404
 
 
-@pytest.mark.parametrize("session", [None, "short", "bad session with spaces 0123456789"])
+@pytest.mark.parametrize(
+    "session",
+    [
+        None,
+        "short",
+        "bad session with spaces 0123456789",
+        "self-made-session-0123456789.AAAAAAAAAAAAAAAAAAAAAA",
+    ],
+)
 async def test_invalid_session_is_rejected(
     client: AsyncClient, key: str, session: str | None
 ) -> None:
@@ -192,7 +207,7 @@ async def test_ip_rate_limit_covers_rotating_sessions(
     url = f"/widget/{key}/messages"
     codes = []
     for i in range(4):
-        headers = {**HEADERS, "X-Widget-Session": f"rotating-session-{i:012}"}
+        headers = {**HEADERS, "X-Widget-Session": sign_session(f"rotating-session-{i:012}")}
         codes.append((await client.post(url, json=_message(), headers=headers)).status_code)
     assert codes == [202, 202, 202, 429]
 
@@ -244,7 +259,7 @@ async def test_stream_of_one_session_is_invisible_to_another(
     channel = await load_channel(await _channel_id(owner_engine, key))
     assert channel is not None
     await WebAdapter().send(channel, customer_id(SESSION), OutgoingMessage(text="секрет"))
-    other = {**HEADERS, "X-Widget-Session": "another-session-0123456789"}
+    other = {**HEADERS, "X-Widget-Session": sign_session("another-session-0123456789")}
     response = await client.get(f"/widget/{key}/stream", headers=other)
     assert "секрет" not in response.text
 
@@ -300,3 +315,23 @@ async def test_connect_web_returns_snippet_and_is_idempotent(
 async def test_connect_web_rejects_bad_domain(client: AsyncClient, owner: uuid.UUID) -> None:
     response = await client.post("/channels/web", json={"domain": "javascript:alert(1)"})
     assert response.status_code == 400
+
+
+async def test_session_is_issued_by_server_and_limited(
+    client: AsyncClient, key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "widget_sessions_per_ip_hour", 1)
+    url = f"/widget/{key}/session"
+
+    issued = await client.post(url, headers={"Origin": ORIGIN})
+    again = await client.post(url, headers={"Origin": ORIGIN})
+    sent = await client.post(
+        f"/widget/{key}/messages",
+        json=_message(),
+        headers={"Origin": ORIGIN, "X-Widget-Session": issued.json()["session"]},
+    )
+
+    assert issued.status_code == 200
+    assert issued.headers["access-control-allow-origin"] == ORIGIN
+    assert again.status_code == 429
+    assert sent.status_code == 202

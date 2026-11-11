@@ -1,4 +1,7 @@
+import base64
 import hashlib
+import hmac
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
@@ -12,10 +15,30 @@ from app.channels.types import (
     Media,
     OutgoingMessage,
 )
+from app.core.config import get_settings
 from app.core.redis import get_redis
 
 STREAM_MAX_EVENTS = 100
 STREAM_TTL = 3600
+
+
+def _signature(session_id: str) -> str:
+    secret = get_settings().jwt_secret.get_secret_value().encode()
+    digest = hmac.new(secret, f"widget:{session_id}".encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest[:16]).decode().rstrip("=")
+
+
+def sign_session(session_id: str) -> str:
+    return f"{session_id}.{_signature(session_id)}"
+
+
+def new_session() -> str:
+    return sign_session(secrets.token_urlsafe(24))
+
+
+def session_valid(token: str) -> bool:
+    session_id, _, signature = token.partition(".")
+    return hmac.compare_digest(signature.encode(), _signature(session_id).encode())
 
 
 def customer_id(session: str) -> str:

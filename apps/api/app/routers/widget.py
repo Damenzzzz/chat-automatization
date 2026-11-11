@@ -12,7 +12,13 @@ from app.channels.http import read_body
 from app.channels.registry import get_adapters
 from app.channels.store import load_channel_by_key
 from app.channels.types import ChannelAdapter, ChannelConfig
-from app.channels.web import customer_id, origin_allowed, stream_key
+from app.channels.web import (
+    customer_id,
+    new_session,
+    origin_allowed,
+    session_valid,
+    stream_key,
+)
 from app.core.config import get_settings
 from app.core.net import client_ip
 from app.core.ratelimit import limit
@@ -21,7 +27,7 @@ from app.routers.webhooks import GatewayDep
 
 router = APIRouter(prefix="/widget", tags=["widget"])
 
-SESSION = re.compile(r"^[A-Za-z0-9_-]{22,64}$")
+SESSION = re.compile(r"^[A-Za-z0-9_-]{22,48}\.[A-Za-z0-9_-]{22}$")
 EVENT_ID = re.compile(r"^\d+-\d+$")
 MAX_BODY = 16 * 1024
 SESSION_PER_MINUTE = 20
@@ -58,7 +64,7 @@ ChannelDep = Annotated[ChannelConfig, Depends(widget_channel)]
 
 
 def client_session(session: str | None, origin: str) -> str:
-    if not session or not SESSION.match(session):
+    if not session or not SESSION.match(session) or not session_valid(session):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "session_invalid", headers=cors_headers(origin)
         )
@@ -80,6 +86,17 @@ async def preflight(channel: ChannelDep, origin: OriginHeader = None) -> Respons
             "Access-Control-Max-Age": "600",
         },
     )
+
+
+@router.post("/{public_key}/session")
+async def open_session(
+    request: Request, channel: ChannelDep, redis: RedisDep, origin: OriginHeader = None
+) -> JSONResponse:
+    origin = origin or ""
+    per_hour = get_settings().widget_sessions_per_ip_hour
+    key = f"widget-new:{channel.id}:{client_ip(request)}"
+    await enforce_limit(redis, key, per_hour, origin, 3600)
+    return JSONResponse({"session": new_session()}, headers=cors_headers(origin))
 
 
 @router.post("/{public_key}/messages")

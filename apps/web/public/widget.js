@@ -18,9 +18,34 @@
     var MAX_HISTORY = 50;
 
     var state = load();
-    if (!state.session) {
-      state.session = randomId(32);
+    var opening = null;
+
+    function ensureSession() {
+      if (state.session && state.session.indexOf(".") > 0) return Promise.resolve(state.session);
+      if (!opening) {
+        opening = fetch(base + "/session", { method: "POST", credentials: "omit" })
+          .then(function (response) {
+            if (!response.ok) throw new Error(String(response.status));
+            return response.json();
+          })
+          .then(function (body) {
+            state.session = body.session;
+            state.lastEventId = null;
+            save();
+            return state.session;
+          })
+          .finally(function () {
+            opening = null;
+          });
+      }
+      return opening;
+    }
+
+    function dropSession(response) {
+      if (response.status !== 400) return false;
+      state.session = null;
       save();
+      return true;
     }
 
     var host = document.createElement("div");
@@ -138,20 +163,25 @@
       deliver({ id: randomId(16), text: text });
     }
 
-    function deliver(body) {
+    function deliver(body, retried) {
       showTyping(true);
-      fetch(base + "/messages", {
-        method: "POST",
-        credentials: "omit",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Widget-Session": state.session,
-        },
-        body: JSON.stringify(body),
-      })
+      ensureSession()
+        .then(function (session) {
+          return fetch(base + "/messages", {
+            method: "POST",
+            credentials: "omit",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Widget-Session": session,
+            },
+            body: JSON.stringify(body),
+          });
+        })
         .then(function (response) {
+          if (dropSession(response) && !retried) return deliver(body, true);
           if (!response.ok) throw new Error(String(response.status));
           connect();
+          return undefined;
         })
         .catch(function () {
           showTyping(false);
@@ -181,14 +211,18 @@
       clearTimeout(retryTimer);
       var controller = new AbortController();
       stream = controller;
-      var headers = { "X-Widget-Session": state.session };
-      if (state.lastEventId) headers["Last-Event-ID"] = state.lastEventId;
-      fetch(base + "/stream", {
-        credentials: "omit",
-        headers: headers,
-        signal: controller.signal,
-      })
+      ensureSession()
+        .then(function (session) {
+          var headers = { "X-Widget-Session": session };
+          if (state.lastEventId) headers["Last-Event-ID"] = state.lastEventId;
+          return fetch(base + "/stream", {
+            credentials: "omit",
+            headers: headers,
+            signal: controller.signal,
+          });
+        })
         .then(function (response) {
+          dropSession(response);
           if (!response.ok || !response.body) throw new Error(String(response.status));
           retryDelay = 1000;
           return readEvents(response.body.getReader());

@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     sandbox_messages_per_hour: int = 120
     sandbox_autotests_per_hour: int = 6
     widget_channel_messages_per_hour: int = 600
+    widget_sessions_per_ip_hour: int = 20
 
     public_api_url: str = "http://localhost:8100"
     public_web_url: str = "http://localhost:3000"
