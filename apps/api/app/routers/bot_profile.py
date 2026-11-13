@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import Principal, TenantDb, require_role
 from app.models import BotProfile
+from app.niches import NICHES, Niche, find_niche, preset_values
 
 router = APIRouter(prefix="/bot-profile", tags=["bot-profile"])
 
@@ -34,6 +35,30 @@ class ProfileOut(ProfileIn):
 
 class RollbackIn(BaseModel):
     version: int | None = None
+
+
+class PresetIn(BaseModel):
+    niche: str = Field(min_length=1, max_length=100)
+
+
+class NicheOut(BaseModel):
+    key: str
+    title: str
+    hint: str
+    tone: str
+    greeting: str
+    rules: dict[str, Any]
+
+
+def niche_out(niche: Niche) -> NicheOut:
+    return NicheOut(
+        key=niche.key,
+        title=niche.title,
+        hint=niche.hint,
+        tone=niche.tone,
+        greeting=niche.greeting,
+        rules=niche.rules(),
+    )
 
 
 def _out(profile: BotProfile) -> ProfileOut:
@@ -96,6 +121,21 @@ async def save_profile(body: ProfileIn, principal: Member, session: TenantDb) ->
     return _out(profile)
 
 
+@router.post("/preset")
+async def apply_preset(body: PresetIn, principal: Member, session: TenantDb) -> ProfileOut:
+    niche = find_niche(body.niche)
+    if niche is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "niche_not_found")
+    current = await _active(session)
+    values = {
+        "languages": current.languages if current else ["ru", "kk"],
+        "model_policy": current.model_policy if current else {},
+        **preset_values(niche, current.rules if current else None),
+    }
+    profile = await _new_version(session, principal, values, current.version if current else None)
+    return _out(profile)
+
+
 @router.post("/rollback")
 async def rollback(
     principal: Member, session: TenantDb, body: RollbackIn | None = None
@@ -117,3 +157,11 @@ async def rollback(
         raise HTTPException(status.HTTP_409_CONFLICT, "no_previous_version")
     values = {name: getattr(target, name) for name in EDITABLE}
     return _out(await _new_version(session, principal, values, target.version))
+
+
+niches_router = APIRouter(tags=["bot-profile"])
+
+
+@niches_router.get("/niches")
+async def list_niches() -> list[NicheOut]:
+    return [niche_out(niche) for niche in NICHES]

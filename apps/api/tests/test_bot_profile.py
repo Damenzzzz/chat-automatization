@@ -53,3 +53,39 @@ async def test_rollback_without_previous_version(client: AsyncClient, owner: uui
 
 async def test_bot_profile_requires_login(client: AsyncClient) -> None:
     assert (await client.get("/bot-profile")).status_code == 401
+
+
+async def test_niches_cover_every_shop_category(client: AsyncClient) -> None:
+    niches = (await client.get("/niches")).json()
+    assert len(niches) >= 12
+    assert len({n["key"] for n in niches}) == len(niches)
+    for niche in niches:
+        assert niche["tone"] and niche["greeting"] and niche["rules"]["handoff"]
+        assert 2 <= len(niche["rules"]["custom"]) <= 4
+        assert not set(niche["rules"]) & {"delivery", "payment", "discounts"}
+
+
+async def test_preset_keeps_delivery_and_payment_of_the_shop(
+    client: AsyncClient, owner: uuid.UUID
+) -> None:
+    rules = {"delivery": "По Алматы 2 000 ₸", "payment": "Kaspi", "custom": ["Старое правило"]}
+    await client.put("/bot-profile", json={"tone": "строгий", "rules": rules, "languages": ["ru"]})
+
+    applied = await client.post("/bot-profile/preset", json={"niche": "Автозапчасти"})
+    assert applied.status_code == 200
+    body = applied.json()
+    assert (body["version"], body["based_on"], body["languages"]) == (2, 1, ["ru"])
+    assert body["rules"]["delivery"] == "По Алматы 2 000 ₸"
+    assert body["rules"]["payment"] == "Kaspi"
+    assert "Старое правило" not in body["rules"]["custom"]
+    assert "VIN" in body["rules"]["handoff"]
+
+    rolled = (await client.post("/bot-profile/rollback")).json()
+    assert rolled["tone"] == "строгий"
+
+
+async def test_preset_for_new_shop_and_unknown_niche(client: AsyncClient, owner: uuid.UUID) -> None:
+    assert (await client.post("/bot-profile/preset", json={"niche": "космос"})).status_code == 404
+    created = await client.post("/bot-profile/preset", json={"niche": "clothing"})
+    assert created.json()["version"] == 1
+    assert created.json()["languages"] == ["ru", "kk"]

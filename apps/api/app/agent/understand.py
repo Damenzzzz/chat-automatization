@@ -19,6 +19,12 @@ class Slots(BaseModel):
     car_make: str | None = None
     car_model: str | None = None
     year: int | None = None
+    brand: str | None = Field(None, description="бренд или производитель товара")
+    size: str | None = Field(None, description="размер: одежда, обувь, кольцо, габариты")
+    color: str | None = None
+    recipient: str | None = Field(
+        None, description="для кого покупка: возраст ребёнка, питомец, тип кожи"
+    )
     sku: str | None = Field(None, description="артикул, если покупатель его назвал")
     delivery_time: str | None = Field(None, description="когда доставить, как сказал покупатель")
 
