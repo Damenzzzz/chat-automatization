@@ -22,7 +22,7 @@ from app.seed import DEMO_TENANT_ID
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 DEMO_WRITABLE = re.compile(
     r"^/(sandbox/chat|conversations/[^/]+/(takeover|release|reply|draft)"
-    r"|leads/[0-9a-f-]{36}|notifications/[^/]+/read)$"
+    r"|leads/[0-9a-f-]{36}|notifications/[^/]+/read|automations/[a-z_]+/preview)$"
 )
 
 

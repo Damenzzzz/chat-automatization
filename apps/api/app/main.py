@@ -12,6 +12,7 @@ from app.routers import (
     admin,
     analytics,
     auth,
+    automations,
     billing,
     bot_profile,
     catalog,
@@ -89,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(channels.router)
     app.include_router(conversations.router)
     app.include_router(leads.router)
+    app.include_router(automations.router)
     app.include_router(products.router)
     app.include_router(shop.router)
     app.include_router(webhooks.router)

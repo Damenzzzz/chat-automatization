@@ -74,31 +74,6 @@ async def test_housekeeping_closes_old_dialogs_and_drops_sandbox(owner_engine: A
     assert statuses == {old: "closed", fresh: "open"}
 
 
-async def test_stale_lead_is_reminded_once(
-    owner_engine: AsyncEngine, redis: Redis, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tenant_id, conversation_id = await make_conversation(owner_engine)
-    async with owner_engine.begin() as conn:
-        await conn.execute(
-            text(
-                "INSERT INTO leads (tenant_id, conversation_id, total_kzt, created_at)"
-                " VALUES (:t, :c, 52000, now() - interval '3 hours')"
-            ),
-            {"t": tenant_id, "c": conversation_id},
-        )
-    sent: list[str] = []
-
-    async def fake_notify(*args: object) -> int:
-        sent.append(str(args[2]))
-        return 1
-
-    monkeypatch.setattr(worker, "notify_staff", fake_notify)
-
-    assert await worker.remind_leads({}) == 1
-    assert await worker.remind_leads({}) == 0
-    assert sent == ["lead.stale"]
-
-
 async def test_sweeper_requeues_stranded_buffer(
     owner_engine: AsyncEngine, redis: Redis, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -26,11 +26,3 @@ async def purge_search_log(keep_days: int) -> int:
     async with get_sessionmaker()() as session, session.begin():
         removed = await session.scalar(text("SELECT purge_search_log(:days)"), {"days": keep_days})
     return int(removed or 0)
-
-
-async def stale_new_leads(wait_hours: int) -> list[tuple[uuid.UUID, uuid.UUID, int]]:
-    async with get_sessionmaker()() as session:
-        rows = await session.execute(
-            text("SELECT * FROM stale_new_leads(:hours)"), {"hours": wait_hours}
-        )
-        return [(r.tenant_id, r.lead_id, int(r.total_kzt or 0)) for r in rows]

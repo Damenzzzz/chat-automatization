@@ -8,6 +8,8 @@ from arq.connections import RedisSettings
 from app.agent.checkpoint import close_checkpointer, get_checkpointer
 from app.agent.nodes import AgentDeps
 from app.agent.runtime import Agent
+from app.automations.base import Deps
+from app.automations.runner import purge_runs, run_due
 from app.billing.alerts import NOTIFY_OWNER, send_owner_message
 from app.catalog.ingest import run_ingest
 from app.catalog.reindex import reindex_tenant, tenants_needing_reindex
@@ -16,7 +18,6 @@ from app.channels.idle import (
     purge_search_log,
     release_idle_conversations,
     retire_idle_conversations,
-    stale_new_leads,
 )
 from app.channels.outbound import Outbound
 from app.channels.processor import Processor
@@ -108,6 +109,7 @@ async def startup(ctx: dict[str, Any]) -> None:
     outbound = Outbound(get_adapters())
     deps = AgentDeps(llm=get_llm(), ml=get_ml_client(), queue=queue, channels=outbound)
     agent = Agent(deps, await get_checkpointer())
+    ctx["agent"] = agent
     ctx["processor"] = Processor(get_redis(), queue, agent, outbound)
 
 
@@ -123,21 +125,15 @@ async def housekeeping(ctx: dict[str, Any]) -> dict[str, int]:
     for conversation_id in retired:
         await checkpointer.adelete_thread(str(conversation_id))
     purged = await purge_search_log(_settings.search_log_keep_days)
-    log.info("housekeeping.done", retired=len(retired), search_log=purged)
-    return {"retired": len(retired), "search_log": purged}
+    runs = await purge_runs(_settings.search_log_keep_days)
+    log.info("housekeeping.done", retired=len(retired), search_log=purged, automation_runs=runs)
+    return {"retired": len(retired), "search_log": purged, "automation_runs": runs}
 
 
-async def remind_leads(ctx: dict[str, Any]) -> int:
-    hours = _settings.lead_reminder_hours
-    if hours <= 0:
-        return 0
-    redis, sent = get_redis(), 0
-    for tenant_id, lead_id, total in await stale_new_leads(hours):
-        if not await redis.set(f"lead-reminded:{lead_id}", "1", nx=True, ex=7 * 24 * 3600):
-            continue
-        payload = {"lead_id": str(lead_id), "total_kzt": total, "hours": hours}
-        sent += await notify_staff(redis, tenant_id, "lead.stale", payload, get_adapters())
-    return sent
+async def run_automations(ctx: dict[str, Any]) -> int:
+    agent: Agent = ctx["agent"]
+    deps = Deps(get_redis(), get_adapters(), Outbound(get_adapters()), agent.remember_manager_reply)
+    return await run_due(deps)
 
 
 async def sweep_inbox(ctx: dict[str, Any], stale_seconds: int = STALE_BUFFER_SECONDS) -> int:
@@ -173,7 +169,7 @@ class WorkerSettings:
         cron(reindex_all, minute=set(range(0, 60, 10)), run_at_startup=True),
         cron(release_idle, minute=set(range(5, 60, 10))),
         cron(sweep_inbox, minute=set(range(1, 60, 2))),
-        cron(remind_leads, minute={7, 37}),
+        cron(run_automations, minute=set(range(7, 60, 10))),
         cron(housekeeping, hour={22}, minute={30}),
     ]
     job_timeout = 1800
