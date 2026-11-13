@@ -24,12 +24,19 @@ const PAGES: (Entry & { ownerOnly?: boolean })[] = [
   { group: "Разделы", label: "Заявки", href: "/leads" },
   { group: "Разделы", label: "Товары", href: "/products" },
   { group: "Разделы", label: "Бот и песочница", href: "/bot" },
+  { group: "Разделы", label: "Сервисы", href: "/services" },
   { group: "Разделы", label: "Каналы", href: "/channels", ownerOnly: true },
   { group: "Разделы", label: "Настройки", href: "/settings" },
   { group: "Действия", label: "Пополнить баланс", href: "/balance", ownerOnly: true },
   { group: "Действия", label: "Загрузить новый прайс", href: "/products?import=1" },
   { group: "Действия", label: "Диалоги, которые ждут ответа", href: "/dialogs?filter=human" },
   { group: "Действия", label: "Новые заявки", href: "/leads?status=new" },
+  { group: "Действия", label: "Заявки, по которым пора напомнить", href: "/leads?due=1" },
+  {
+    group: "Действия",
+    label: "Напоминания покупателям на одобрение",
+    href: "/services?service=followup",
+  },
 ];
 
 export function openPalette() {

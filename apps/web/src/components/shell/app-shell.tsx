@@ -14,6 +14,7 @@ import {
   Settings,
   Sun,
   Wallet,
+  Workflow,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -41,6 +42,7 @@ const NAV: Item[] = [
   { href: "/leads", label: "Заявки", icon: ClipboardList },
   { href: "/products", label: "Товары", icon: Package },
   { href: "/bot", label: "Бот и песочница", icon: Bot },
+  { href: "/services", label: "Сервисы", icon: Workflow },
   { href: "/channels", label: "Каналы", icon: Plug, ownerOnly: true },
   { href: "/balance", label: "Баланс", icon: Wallet, ownerOnly: true },
   { href: "/settings", label: "Настройки", icon: Settings },

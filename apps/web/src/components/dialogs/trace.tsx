@@ -81,6 +81,10 @@ function describe(step: Step): string | null {
       return step.delivered === false
         ? `Не доставлено: ${String(step.error ?? "канал недоступен")}.`
         : null;
+    case "followup":
+      return step.user_id
+        ? "Напоминание покупателю: отправил менеджер из раздела «Сервисы»."
+        : "Напоминание покупателю: отправлено сервисом «Возврат покупателя».";
     case "meter": {
       const charge = step.charge as { charged_kzt?: number } | undefined;
       if (charge?.charged_kzt !== undefined) return `Списано ${money(charge.charged_kzt)}.`;

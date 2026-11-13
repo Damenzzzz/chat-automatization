@@ -16,6 +16,7 @@ export const config = {
     "/leads",
     "/products",
     "/bot",
+    "/services",
     "/channels",
     "/balance",
     "/settings",
