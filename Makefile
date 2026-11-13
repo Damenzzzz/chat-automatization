@@ -7,8 +7,9 @@ COMPOSE := docker compose -f infra/docker-compose.yml $(ENV_FILES)
 API := cd apps/api &&
 ML := cd apps/ml &&
 WEB := cd apps/web &&
+LANDING_PY := uv run --no-project --python 3.13 --with pytest --with ruff
 
-.PHONY: help up down logs ps migrate seed admin eval test lint fmt install api-types backup
+.PHONY: help up down logs ps migrate seed admin eval test lint fmt install api-types backup landing-test landing-build landing-deploy
 
 help: ## Список команд
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -70,3 +71,13 @@ backup: ## Дамп базы в backups/ (нужен make up); восстано�
 	@mkdir -p backups
 	$(COMPOSE) exec -T postgres sh -c 'pg_dump -Fc -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/satushy-$$(date +%Y%m%d-%H%M%S).dump
 	@ls -lh backups | tail -1
+
+landing-test: ## Тесты и линтер лендинга (сайт и функция заявок), сервисы не нужны
+	node --test apps/landing/tests/site.test.mjs
+	cd apps/landing && $(LANDING_PY) sh -c 'ruff check lambda && ruff format --check lambda && pytest lambda -q'
+
+landing-build: ## Собрать лендинг в apps/landing/dist
+	node apps/landing/build.mjs
+
+landing-deploy: landing-test ## Развернуть лендинг в AWS; первый раз: make landing-deploy LEADS_EMAIL=you@example.com
+	LEADS_EMAIL=$(LEADS_EMAIL) infra/landing/deploy.sh

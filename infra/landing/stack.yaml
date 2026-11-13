@@ -1,0 +1,262 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Satushy landing: static site in S3 behind CloudFront and a contact form
+  (API Gateway -> Lambda -> S3 + SNS email). No servers, no database.
+
+Parameters:
+  LeadsEmail:
+    Type: String
+    Description: Address that receives contact form requests (must confirm the SNS subscription).
+  OriginSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    Description: Header value CloudFront adds to form requests; the function rejects requests without it.
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${SiteBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+
+  # Заявки хранятся отдельно и переживают удаление стека.
+  LeadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  LeadsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Satushy
+
+  LeadsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref LeadsTopic
+      Protocol: email
+      Endpoint: !Ref LeadsEmail
+
+  LeadLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-lead"
+      RetentionInDays: 30
+
+  LeadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: lead
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${LeadLogGroup.Arn}:*"
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "${LeadsBucket.Arn}/leads/*"
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref LeadsTopic
+
+  LeadFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LeadLogGroup
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-lead"
+      Runtime: python3.13
+      Architectures: [arm64]
+      Handler: handler.handler
+      Role: !GetAtt LeadRole.Arn
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          LEADS_BUCKET: !Ref LeadsBucket
+          LEADS_TOPIC_ARN: !Ref LeadsTopic
+          ORIGIN_SECRET: !Ref OriginSecret
+      # Заглушка: настоящий код из apps/landing/lambda кладёт deploy.sh сразу после стека.
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"statusCode": 503, "body": "deploying"}
+
+  LeadApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-lead"
+      ProtocolType: HTTP
+
+  LeadIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LeadApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LeadFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  LeadRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LeadApi
+      RouteKey: POST /api/lead
+      Target: !Sub "integrations/${LeadIntegration}"
+
+  # Ограничение частоты: защита от заваливания почты заявками.
+  LeadStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref LeadApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 5
+        ThrottlingRateLimit: 2
+
+  LeadPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LeadFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LeadApi}/*"
+
+  SiteAccess:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-site"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SecurityHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub "${AWS::StackName}-headers"
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: >-
+              default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self';
+              img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self';
+              form-action 'self'; frame-ancestors 'none'
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Satushy landing
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_All
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteAccess.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: api
+            DomainName: !Sub "${LeadApi}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+            OriginCustomHeaders:
+              - HeaderName: x-origin-verify
+                HeaderValue: !Ref OriginSecret
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          ResponseHeadersPolicyId: !Ref SecurityHeaders
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+            ResponseHeadersPolicyId: !Ref SecurityHeaders
+        # Закрытый бакет отвечает 403 на несуществующий файл — показываем страницу «не найдено».
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+
+Outputs:
+  SiteUrl:
+    Value: !Sub "https://${Distribution.DomainName}"
+  DistributionId:
+    Value: !Ref Distribution
+  SiteBucketName:
+    Value: !Ref SiteBucket
+  LeadsBucketName:
+    Value: !Ref LeadsBucket
+  LeadFunctionName:
+    Value: !Ref LeadFunction
+  LeadsTopicArn:
+    Value: !Ref LeadsTopic

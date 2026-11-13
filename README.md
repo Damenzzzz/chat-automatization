@@ -9,3 +9,15 @@ AI-консультант для магазинов Казахстана: зна
 cp .env.example .env
 make up
 ```
+
+## Лендинг
+
+Сайт команды живёт отдельно от сервиса — в `apps/landing`: статические страницы и форма заявки, без API и кабинета.
+
+```bash
+make landing-test                                  # тесты сайта и функции заявок
+make landing-deploy LEADS_EMAIL=you@example.com    # первый запуск: S3, CloudFront, функция заявок
+make landing-deploy                                # обновить сайт
+```
+
+Как это устроено и почему — [docs/adr/0012-landing-on-aws.md](docs/adr/0012-landing-on-aws.md).
