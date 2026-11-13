@@ -77,3 +77,13 @@ test("страница ничего не грузит с чужих сервер
   const images = files.filter((path) => /\.(png|jpe?g|webp|gif|mp4)$/i.test(path));
   assert.deepEqual(images, []);
 });
+
+test("ссылки шапки прокручивают к разделу плавно", () => {
+  const css = files
+    .filter((path) => path.endsWith(".css"))
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
+  assert.match(css, /html:has\(\[data-landing\]\)\{scroll-behavior:smooth/);
+  assert.match(html, /<div[^>]*data-landing/);
+  assert.match(html, /<html[^>]*data-scroll-behavior="smooth"/);
+});

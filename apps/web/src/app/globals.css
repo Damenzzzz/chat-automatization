@@ -86,6 +86,12 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /* На лендинге ссылки шапки плавно прокручивают к разделу. В кабинете прокрутка обычная.
+     При «уменьшении движения» плавность отключает общее правило ниже. */
+  html:has([data-landing]) {
+    scroll-behavior: smooth;
+  }
+
   body {
     background: var(--canvas);
     color: var(--ink);

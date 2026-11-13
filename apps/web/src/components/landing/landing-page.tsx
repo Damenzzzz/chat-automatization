@@ -540,7 +540,7 @@ export function LandingPage({
   demo?: ReactNode;
 }) {
   return (
-    <div className="on-ink min-h-svh overflow-x-clip bg-night text-paper">
+    <div data-landing className="on-ink min-h-svh overflow-x-clip bg-night text-paper">
       <a
         href="#main"
         className="absolute top-2 left-2 z-50 -translate-y-20 rounded-md bg-paper px-3 py-2 text-sm text-ink focus:translate-y-0"

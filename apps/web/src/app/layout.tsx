@@ -26,7 +26,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ru" className={cn(golos.variable, geologica.variable)}>
+    // data-scroll-behavior: переходы между страницами остаются мгновенными,
+    // плавная прокрутка действует только для ссылок-якорей лендинга.
+    <html
+      lang="ru"
+      data-scroll-behavior="smooth"
+      className={cn(golos.variable, geologica.variable)}
+    >
       <body>{children}</body>
     </html>
   );
