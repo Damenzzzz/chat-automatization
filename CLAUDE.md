@@ -13,6 +13,7 @@ apps/api/        FastAPI: кабинет, вебхуки каналов, ARQ-в�
   app/channels/  шлюз каналов: адаптеры, очередь, склейка
   app/billing/   цены, журнал, счёт PDF, уведомления о балансе
   app/analytics/ периоды, метрики, группировка неотвеченных
+  app/automations/ сервисы рядом с ботом: сводка, остатки, напоминания
   migrations/    Alembic (async)
 apps/ml/         FastAPI для локальных моделей: эмбеддинги, реранкер, whisper
 apps/web/        Next.js (App Router, TS, Tailwind 4): кабинет магазина
@@ -39,7 +40,7 @@ make backup             # дамп базы в backups/ (нужен make up)
 make down
 ```
 
-Порты на хосте: api **8100**, ml 8001, web 3000, postgres **5433**, redis 6379, minio 9000/9001. Переопределяются через `*_PORT` в `.env`.
+Порты на хосте: api **8100**, ml 8001, web 3000, postgres **5433**, redis 6379, minio 9000/9001. Переопределяются через `*_PORT` в `.env`. Все привязаны к `127.0.0.1`: сервис не публикуется, наружу выложен только лендинг. Привязку не снимать (тест `test_local_only.py`).
 
 ## Правила
 
@@ -116,7 +117,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Путь сообщения: вебхук проверяет подпись → `Gateway.accept` (SETNX `dedup:*` на 24 часа, буфер, задача ARQ `flush_customer` через 1,5 с) → `Processor.flush` (последний `seq`, блокировка диалога, склейка) → граф. В режиме human сообщение сохраняется и уходит `notify_manager`.
 - `notify_manager` → `app/channels/staff.py`: Telegram всем активным сотрудникам с привязанным чатом (заявка, передача диалога, сбой хода, ожидающий покупатель — не чаще раза в 10 минут на диалог). После трёх неудач `Processor.give_up` отвечает покупателю шаблоном и переводит диалог менеджеру.
 - Cron `release_idle` (раз в 10 минут): диалог у менеджера без сообщений `HUMAN_IDLE_RELEASE_HOURS` часов возвращается боту, пауза `rate_limit` снимается через час (SQL-функция `release_idle_conversations`).
-- Cron воркера: `sweep_inbox` (буферы без обработки 90 с), `remind_leads` (заявка `new` старше `LEAD_REMINDER_HOURS`), `housekeeping` (закрытие диалогов через 30 дней тишины, удаление старой песочницы и их чекпоинтов, чистка `search_log`). Межарендные выборки — только SQL-функции SECURITY DEFINER из миграций 0017 и 0019.
+- Cron воркера: `sweep_inbox` (буферы без обработки 90 с), `run_automations` (раз в 10 минут, см. «Автоматизации»), `housekeeping` (закрытие диалогов через 30 дней тишины, удаление старой песочницы и их чекпоинтов, чистка `search_log`). Межарендные выборки — только SQL-функции SECURITY DEFINER из миграций 0017 и 0019.
 - Блокировка диалога 120 с, её продлевает `keep_locked`; не полагаться на то, что ход короче TTL.
 - Любое изменение диалога или заявки вне этих мест должно вызвать `poke(tenant_id)` (`app/core/poke.py`), иначе кабинет увидит его только через 5 секунд.
 - Узел `gate` показывает покупателю «печатает» (`Outbound.typing`: Telegram и WhatsApp). HTTP-клиенты каналов и ML общие на процесс.
@@ -149,11 +150,25 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - `unanswered` группирует вопросы эмбеддингами с порогом `UNANSWERED_GROUP_THRESHOLD` (ML недоступен → точное совпадение текста, `grouped_by = text`).
 - `POST /unanswered/{id}/answer {answer, also_resolve}` → кусок `kb_chunks` (`source = unanswered`), ARQ `reindex_embeddings`, вопросы решены.
 
+## Автоматизации и управление заявками
+
+Решения — [ADR 0013](docs/adr/0013-automations.md).
+
+- `app/automations`: `Service` (`base.py`) с настройками pydantic и методами `due`, `preview`, `run`; реестр — `registry.py`; запуск — `runner.execute(tenant_id, kind, trigger, deps)`. Сервисы: `digest`, `stock`, `followup`, `lead_reminders` (включён по умолчанию, остальные выключены).
+- API: `GET /automations`, `PUT /automations/{kind}` (owner), `POST /automations/{kind}/preview`, `POST /automations/{kind}/run` (owner, 6 в час), `GET /automations/{kind}/runs`, `GET /followups`, `POST /followups/{id}/send|reject`.
+- `preview` не пишет в базу и ничего не отправляет. Новый сервис обязан соблюдать это: в демо-магазине разрешён только `preview`.
+- Межарендный список — SQL-функция `due_automations()`; сам сервис работает внутри `tenant_session`. Пустой запуск по расписанию в `automation_runs` не пишется.
+- Сообщение покупателю из `followup` — только через `deliver` (`followup.py`): он проверяет окно 23 часа, режим диалога и ответ покупателя. Текст покупателя в сводки, историю запусков и логи не попадает.
+- Тесты делят базу, а `due_automations()` видит все магазины: в тестах запускать сервис для своего магазина (`_tick` в `tests/test_automations.py`), а не `run_due`.
+- Категории бизнеса — `app/niches.py`: `GET /niches` (без входа), `POST /bot-profile/preset {niche}`. В заготовке нет фактов о магазине; `delivery`, `payment`, `discounts` при применении сохраняются.
+- Заявка: `assignee_id`, `cancel_reason` (только у `cancelled`), `remind_at`, `note`; диалог: `assignee_id`; покупатель: `tags`. `PATCH /leads/{id}` меняет только переданные поля, `POST /leads/bulk`, `GET /leads/export` (CSV, owner; ячейки-формулы экранируются `csv_cell`).
+- Ответственным может быть только активный сотрудник своего магазина (`ensure_member`). Админ под чужим магазином в ответственные не попадает (`own_user`).
+
 ## Кабинет (apps/web)
 
 Смысл оформления и токены — [docs/design-tokens.md](docs/design-tokens.md). Решения — [ADR 0007](docs/adr/0007-cabinet-api-access.md).
 
-- Страницы: `/` (лендинг с живым чатом демо-бота, `components/landing`), `/login`, `/signup`, `/setup?step=1..5`, `/overview` (экран «Сегодня»: очередь `components/overview/queue.tsx`, деньги и воронка), `/dialogs?id=&filter=`, `/leads`, `/products`, `/bot`, `/channels`, `/balance`, `/settings`. `page.tsx` — серверный (metadata), `view.tsx` — клиентский.
+- Страницы: `/` (лендинг с живым чатом демо-бота, `components/landing`), `/login`, `/signup`, `/setup?step=1..5`, `/overview` (экран «Сегодня»: очередь `components/overview/queue.tsx`, деньги и воронка), `/dialogs?id=&filter=`, `/leads`, `/products`, `/bot`, `/services` (`components/services`), `/channels`, `/balance`, `/settings`. `page.tsx` — серверный (metadata), `view.tsx` — клиентский.
 - Оформление: небо `sky` — действие и бот, солнце `sun` — «нужен человек», `ink` — текст и меню; разделы — белые `panel` на `canvas`; заголовки Geologica, текст Golos Text. Белый текст на `sky` не ставить.
 - `useSession()` отдаёт `me`/`shop` только после гидратации, иначе серверная и клиентская разметка расходятся.
 - Prettier сортирует классы по `globals.css`: новую утилиту коммитить вместе с файлами, которые её используют, или раньше них.
@@ -181,7 +196,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 
 - `POST /demo/login` — вход владельцем «Цветы Пион»; `ensure_demo_shop` досеивает каталог, историю (`app/demo/activity.py`, покупатели `demo:*`, пересоздаётся старше 2 дней) и баланс. `make seed` делает то же.
 - `POST /demo/chat {message, session_id}` — публичный чат лендинга, граф песочницы, 12 в минуту и 60 в час на IP, `DEMO_CHAT_DAILY_LIMIT` в сутки на всех, в ответе `cards` с ценой из БД.
-- Демо-сессия только читает: не-GET запросы отклоняются с `demo_read_only`, кроме списка `DEMO_WRITABLE` в `app/auth/deps.py` (песочница, перехват, ответ, черновик, статус заявки). Новую изменяющую ручку, нужную в демо, добавлять в этот список.
+- Демо-сессия только читает: не-GET запросы отклоняются с `demo_read_only`, кроме списка `DEMO_WRITABLE` в `app/auth/deps.py` (песочница, перехват, ответ, черновик, поля заявки, проверка автоматизации без отправки). Новую изменяющую ручку, нужную в демо, добавлять в этот список.
 - `POST /auth/request-code` при демо и `ENV != prod` возвращает `demo_code`, форма входа показывает его и подставляет. `GET /me` → `demo`.
 
 ## Модели
