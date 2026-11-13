@@ -9,11 +9,18 @@ import { api, type Schemas } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/errors";
 import { fullDate, money } from "@/lib/format";
 
-import { LEAD_STATUS } from "./labels";
+import { CANCEL_REASONS, LEAD_STATUS } from "./labels";
 
 type LeadItem = { name?: string; sku?: string; qty?: number; quantity?: number; price?: number };
 
-export function LeadCard({ lead }: { lead: Schemas["LeadOut"] }) {
+/** `managed = false` — только состав заказа: статус и остальное правят рядом, в таблице заявок. */
+export function LeadCard({
+  lead,
+  managed = true,
+}: {
+  lead: Schemas["LeadOut"];
+  managed?: boolean;
+}) {
   const { mutate } = useSWRConfig();
   const [error, setError] = useState<unknown>(null);
   const [status, setStatus] = useState(lead.status);
@@ -67,6 +74,14 @@ export function LeadCard({ lead }: { lead: Schemas["LeadOut"] }) {
           ["Адрес", lead.address],
           ["Доставка", lead.delivery_at ? fullDate(lead.delivery_at) : lead.delivery_note],
           ["Комментарий", lead.comment],
+          ...(managed
+            ? [
+                ["Ответственный", lead.assignee_name],
+                ["Причина отказа", CANCEL_REASONS[lead.cancel_reason ?? ""]],
+                ["Напомнить", lead.remind_at ? fullDate(lead.remind_at) : null],
+                ["Заметка", lead.note],
+              ]
+            : []),
         ]
           .filter(([, value]) => value)
           .map(([label, value]) => (
@@ -84,17 +99,19 @@ export function LeadCard({ lead }: { lead: Schemas["LeadOut"] }) {
             </div>
           ))}
       </dl>
-      <SelectField
-        label="Статус заявки"
-        value={status}
-        onChange={(event) => void change(event.target.value)}
-      >
-        {Object.entries(LEAD_STATUS).map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </SelectField>
+      {managed && (
+        <SelectField
+          label="Статус заявки"
+          value={status}
+          onChange={(event) => void change(event.target.value)}
+        >
+          {Object.entries(LEAD_STATUS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </SelectField>
+      )}
       <FormError error={error} />
     </article>
   );

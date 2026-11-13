@@ -11,6 +11,7 @@ import { FormError, LoadError, Loading } from "@/components/ui/page";
 import { api, type Schemas } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/errors";
 import { useSession } from "@/components/shell/session";
+import { memberLabel, useTeam } from "@/components/shop/team";
 import { clock, money, shortDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -312,8 +313,10 @@ export function Thread({ id }: { id: string }) {
       api.GET("/conversations/{conversation_id}", { params: { path: { conversation_id: id } } }),
     ),
   );
+  const team = useTeam();
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<unknown>(null);
+  const [assignee, setAssignee] = useState<string | null | undefined>(undefined);
 
   function refreshAll() {
     void mutate();
@@ -338,6 +341,25 @@ export function Thread({ id }: { id: string }) {
     }
   }
 
+  async function assign(value: string) {
+    setAssignee(value || null);
+    setSwitchError(null);
+    try {
+      await unwrap(
+        api.PATCH("/conversations/{conversation_id}", {
+          params: { path: { conversation_id: id } },
+          body: { assignee_id: value || null },
+        }),
+      );
+      await mutate();
+      void mutateGlobal((item) => typeof item === "string" && item.startsWith("/conversations?"));
+    } catch (failure) {
+      setSwitchError(failure);
+    } finally {
+      setAssignee(undefined);
+    }
+  }
+
   if (isLoading) return <Loading className="px-6" />;
   if (error || !data) {
     return (
@@ -349,6 +371,11 @@ export function Thread({ id }: { id: string }) {
 
   const human = data.mode === "human";
   const lead = data.leads[0];
+  const assigneeId = assignee === undefined ? data.assignee_id : assignee;
+  const outsider =
+    data.assignee_id && !team.some((member) => member.id === data.assignee_id)
+      ? { id: data.assignee_id, label: data.assignee_name ?? "Сотрудник" }
+      : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -376,6 +403,23 @@ export function Thread({ id }: { id: string }) {
               {CHANNEL_NAMES[data.channel ?? ""] ?? data.channel}
             </p>
           </div>
+          <label className="flex min-w-0 items-center gap-2 text-xs">
+            <span className={human ? "text-haze" : "text-steel"}>Ответственный</span>
+            <select
+              value={assigneeId ?? ""}
+              disabled={assignee !== undefined}
+              onChange={(event) => void assign(event.target.value)}
+              className="min-h-11 max-w-44 min-w-0 rounded-md border border-control bg-paper px-2 text-base text-ink hover:border-ink sm:min-h-10 sm:text-sm"
+            >
+              <option value="">Не назначен</option>
+              {outsider && <option value={outsider.id}>{outsider.label}</option>}
+              {team.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {memberLabel(member)}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             variant={human ? "onInk" : "primary"}
             loading={switching}

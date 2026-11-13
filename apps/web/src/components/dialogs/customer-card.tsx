@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
+import { useSWRConfig } from "swr";
 
+import { Chip } from "@/components/ui/chip";
 import { FormError } from "@/components/ui/page";
 import { api, type Schemas } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/errors";
 import { money, plural, shortDay } from "@/lib/format";
 
 import { CHANNEL_NAMES, LEAD_STATUS } from "./labels";
+
+const MAX_TAGS = 10;
+const TAG_LENGTH = 30;
 
 const LANGS: Record<string, string> = {
   ru: "на русском",
@@ -24,7 +29,10 @@ export function CustomerCard({
   customer: Schemas["CustomerOut"];
   onSaved: () => void;
 }) {
+  const { mutate } = useSWRConfig();
   const [note, setNote] = useState(customer.note ?? "");
+  const [tags, setTags] = useState(customer.tags);
+  const [tagInput, setTagInput] = useState("");
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<unknown>(null);
   const name = customer.name || customer.phone || "Покупатель";
@@ -46,6 +54,52 @@ export function CustomerCard({
     } catch (failure) {
       setError(failure);
       setState("idle");
+    }
+  }
+
+  async function saveTags(next: string[]) {
+    const previous = tags;
+    setTags(next);
+    setError(null);
+    try {
+      const saved = await unwrap(
+        api.PATCH("/conversations/{conversation_id}/customer", {
+          params: { path: { conversation_id: conversationId } },
+          body: { tags: next },
+        }),
+      );
+      setTags(saved.tags);
+      onSaved();
+      void mutate(
+        (key) =>
+          typeof key === "string" &&
+          (key.startsWith("/conversations?") ||
+            key === "/conversations/tags" ||
+            key.startsWith("/leads")),
+      );
+    } catch (failure) {
+      setTags(previous);
+      setError(failure);
+    }
+  }
+
+  function addTag() {
+    const text = tagInput
+      .replace(/,/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, TAG_LENGTH)
+      .trim();
+    setTagInput("");
+    if (!text || tags.length >= MAX_TAGS) return;
+    if (tags.some((tag) => tag.toLowerCase() === text.toLowerCase())) return;
+    void saveTags([...tags, text]);
+  }
+
+  function onTagKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addTag();
     }
   }
 
@@ -96,6 +150,40 @@ export function CustomerCard({
           </ul>
         </div>
       )}
+      <div>
+        <label htmlFor={`tags-${customer.id}`} className="mb-1.5 block text-steel">
+          Метки покупателя
+        </label>
+        {tags.length > 0 && (
+          <ul className="mb-2 flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <li key={tag} className="max-w-full">
+                <Chip
+                  onRemove={() => void saveTags(tags.filter((item) => item !== tag))}
+                  removeLabel={`Убрать метку «${tag}»`}
+                >
+                  {tag}
+                </Chip>
+              </li>
+            ))}
+          </ul>
+        )}
+        {tags.length < MAX_TAGS ? (
+          <input
+            id={`tags-${customer.id}`}
+            value={tagInput}
+            maxLength={TAG_LENGTH}
+            onChange={(event) => setTagInput(event.target.value)}
+            onKeyDown={onTagKey}
+            onBlur={addTag}
+            placeholder="Например: опт, постоянный"
+            className="min-h-11 w-full rounded-md border border-control bg-paper px-3 hover:border-ink sm:min-h-10"
+          />
+        ) : (
+          <p className="text-xs text-steel">Больше {MAX_TAGS} меток добавить нельзя.</p>
+        )}
+        <p className="mt-1 text-xs text-steel">Enter или запятая добавляет метку.</p>
+      </div>
       <div>
         <label htmlFor={`note-${customer.id}`} className="mb-1.5 block text-steel">
           Заметка для команды
