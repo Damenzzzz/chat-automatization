@@ -167,9 +167,15 @@ export function ServicePanel({ item }: { item: Automation }) {
             <Button
               variant="secondary"
               loading={busy === "run"}
-              disabled={dirty || busy !== null}
+              disabled={dirty || !item.enabled || busy !== null}
               onClick={run}
-              title={dirty ? "Сначала сохраните настройки" : undefined}
+              title={
+                !item.enabled
+                  ? "Сначала включите сервис"
+                  : dirty
+                    ? "Сначала сохраните настройки"
+                    : undefined
+              }
             >
               Запустить сейчас
             </Button>

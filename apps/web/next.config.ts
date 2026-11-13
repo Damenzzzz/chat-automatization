@@ -24,6 +24,8 @@ const landingConfig: NextConfig = {
 
 const serviceConfig: NextConfig = {
   output: "standalone",
+  // Кабинет открыт только на этом компьютере; без этой строки next dev не отдаёт скрипты по 127.0.0.1.
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: { proxyTimeout: 300_000 },
   async headers() {
     return [
