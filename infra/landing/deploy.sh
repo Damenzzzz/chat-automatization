@@ -15,8 +15,8 @@ out() {
 }
 
 echo "==> Сборка сайта"
-node "$ROOT/apps/landing/build.mjs" >/dev/null
-DIST="$ROOT/apps/landing/dist"
+(cd "$ROOT/apps/web" && LANDING_ONLY=1 NEXT_TELEMETRY_DISABLED=1 npx next build >/dev/null)
+DIST="$ROOT/apps/web/out"
 
 echo "==> Стек $STACK ($REGION)"
 params=()
@@ -41,15 +41,13 @@ aws lambda wait function-updated --region "$REGION" --function-name "$FN"
 
 echo "==> Файлы сайта"
 BUCKET="$(out SiteBucketName)"
-# Стили и скрипт с хешем в имени и шрифты — в кеш на год.
-aws s3 sync "$DIST" "s3://$BUCKET" --region "$REGION" --delete --only-show-errors \
-  --exclude "*.html" --exclude "robots.txt" --exclude "favicon.svg" --exclude "fonts/*" \
+# Скрипты, стили и шрифты сборки: в имени хеш, поэтому в кеш на год.
+aws s3 sync "$DIST/_next" "s3://$BUCKET/_next" --region "$REGION" --delete --only-show-errors \
   --cache-control "public, max-age=31536000, immutable"
-aws s3 sync "$DIST/fonts" "s3://$BUCKET/fonts" --region "$REGION" --delete --only-show-errors \
-  --content-type "font/woff2" --cache-control "public, max-age=31536000, immutable"
 # Страницы — на пять минут, чтобы правки расходились быстро.
-aws s3 sync "$DIST" "s3://$BUCKET" --region "$REGION" --only-show-errors \
-  --exclude "*" --include "*.html" --include "robots.txt" --include "favicon.svg" \
+# widget.js — скрипт виджета сервиса, на лендинге он не нужен.
+aws s3 sync "$DIST" "s3://$BUCKET" --region "$REGION" --delete --only-show-errors \
+  --exclude "_next/*" --exclude "widget.js" \
   --cache-control "public, max-age=300"
 
 echo "==> Сброс кеша CloudFront"
