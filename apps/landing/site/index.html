@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ru" class="js">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Satushy — автоматизация и чат-боты для бизнеса в Казахстане</title>
+    <meta
+      name="description"
+      content="Satushy — IT-команда из Казахстана. Делаем чат-ботов, которые продают в WhatsApp, Instagram и Telegram, и автоматизируем заявки, отчёты, документы и сверки."
+    />
+    <meta name="theme-color" content="#050b1a" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Satushy — автоматизация и чат-боты для бизнеса" />
+    <meta
+      property="og:description"
+      content="IT-команда из Казахстана. Берём работу, которую люди делают руками каждый день, и превращаем её в программу."
+    />
+    <meta property="og:locale" content="ru_KZ" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="fonts/geologica-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/golos-text-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="styles.css" />
+    <noscript><link rel="stylesheet" href="nojs.css" /></noscript>
+    <script src="main.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">К содержанию</a>
+
+    <header class="nav" id="nav">
+      <div class="wrap nav__row">
+        <a class="wordmark" href="#top" aria-label="Satushy, наверх">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path
+              d="M8 2h16a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H11l-6.2 4.6c-.6.5-1.3 0-1.3-.7V8A6 6 0 0 1 8 2z"
+              fill="#00b2cf"
+            />
+            <path
+              d="M20.6 10.2c-1-1.1-2.7-1.8-4.4-1.8-2.7 0-4.5 1.4-4.5 3.4 0 4.6 9.2 2.5 9.2 6.8 0 1.6-1.7 2.6-4.1 2.6-2 0-3.8-.8-4.9-2"
+              fill="none"
+              stroke="#050b1a"
+              stroke-width="2.4"
+              stroke-linecap="round"
+            />
+            <circle cx="26" cy="6" r="3.6" fill="#ffc629" />
+          </svg>
+          satushy
+        </a>
+        <nav class="nav__links" aria-label="Разделы страницы">
+          <a href="#services">Что делаем</a>
+          <a href="#bot">Бот-продавец</a>
+          <a href="#process">Как работаем</a>
+          <a href="#faq">Вопросы</a>
+        </nav>
+        <a class="btn btn--glow btn--sm" href="#contact">Обсудить задачу</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="sky" aria-hidden="true">
+          <canvas class="sky__stars" id="stars"></canvas>
+          <div class="sky__blob sky__blob--a"></div>
+          <div class="sky__blob sky__blob--b"></div>
+          <div class="sky__dawn"></div>
+          <div class="sky__sun"></div>
+        </div>
+
+        <div class="wrap hero__grid">
+          <div class="hero__copy">
+            <h1>Работа, которая делается сама</h1>
+            <p class="hero__lead">
+              Satushy — IT-команда из Казахстана. Пишем чат-ботов, которые продают в WhatsApp,
+              Instagram и Telegram, и автоматизируем то, что сотрудники делают руками: заявки,
+              отчёты, документы, сверки.
+            </p>
+            <div class="hero__actions">
+              <a class="btn btn--glow" href="#contact">Обсудить задачу</a>
+              <a class="btn btn--ghost" href="#services">Что мы делаем</a>
+            </div>
+          </div>
+
+          <div class="shift" id="shift">
+            <div class="shift__head">
+              <p class="shift__title">Пример: одна ночь в цветочном магазине после автоматизации</p>
+              <p class="shift__clock" id="clock" aria-hidden="true">23:41</p>
+            </div>
+            <ol class="shift__log" id="log">
+              <li class="shift__row is-waiting" data-at="-19">
+                <time>23:41</time>
+                <div>
+                  <span class="tag">Instagram</span>
+                  <p>Покупательница спрашивает белые пионы на завтра. Бот называет цену и остаток из каталога.</p>
+                </div>
+              </li>
+              <li class="shift__row is-waiting" data-at="15">
+                <time>00:15</time>
+                <div>
+                  <span class="tag">WhatsApp</span>
+                  <p>Голосовое на казахском: «51 раушан қанша?» Бот расшифровал его и ответил по-казахски.</p>
+                </div>
+              </li>
+              <li class="shift__row is-waiting" data-at="120">
+                <time>02:00</time>
+                <div>
+                  <span class="tag">Заказы</span>
+                  <p>Заказы за день сверены с оплатами. Два расхождения выписаны в таблицу.</p>
+                </div>
+              </li>
+              <li class="shift__row is-waiting" data-at="270">
+                <time>04:30</time>
+                <div>
+                  <span class="tag">Накладные</span>
+                  <p>Фото накладных от поставщика распознаны, остатки в каталоге обновлены.</p>
+                </div>
+              </li>
+              <li class="shift__row is-waiting" data-at="410">
+                <time>06:50</time>
+                <div>
+                  <span class="tag">Отчёт</span>
+                  <p>Сводка за сутки ушла владельцу в Telegram.</p>
+                </div>
+              </li>
+              <li class="shift__row is-waiting" data-at="420">
+                <time>07:00</time>
+                <div>
+                  <span class="tag tag--sun">Утро</span>
+                  <p>Две заявки с адресом и временем доставки ждут менеджера.</p>
+                </div>
+              </li>
+            </ol>
+            <button class="shift__replay is-hidden" id="replay" type="button">Показать ночь ещё раз</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section services" id="services">
+        <div class="wrap">
+          <div class="section__head">
+            <h2>Что автоматизируем</h2>
+            <p>
+              Берём работу, которую люди делают руками каждый день, и превращаем её в программу.
+              Чат-боты — наше главное направление, но не единственное.
+            </p>
+          </div>
+          <ul class="services__list">
+            <li>
+              <h3>Чат-боты для продаж и поддержки</h3>
+              <p>
+                Отвечают покупателям в WhatsApp, Instagram, Telegram и на сайте — на русском и
+                казахском, по вашему каталогу и вашим правилам.
+              </p>
+            </li>
+            <li>
+              <h3>Заявки и CRM</h3>
+              <p>
+                Заявка из любого канала попадает в одну таблицу или CRM, а менеджер сразу получает
+                уведомление. Ничего не теряется в переписках.
+              </p>
+            </li>
+            <li>
+              <h3>Отчёты и сверки</h3>
+              <p>
+                Собираем данные из таблиц, учётных систем и выгрузок, сверяем их между собой и
+                присылаем готовую сводку по расписанию.
+              </p>
+            </li>
+            <li>
+              <h3>Документы</h3>
+              <p>
+                Счета, накладные, договоры: распознаём с фото и сканов, заполняем по шаблону и
+                раскладываем по папкам.
+              </p>
+            </li>
+            <li>
+              <h3>Распознавание фото</h3>
+              <p>
+                Компьютерное зрение считает товары на полке, проверяет выкладку и находит то, что
+                человек на фото пропустит.
+              </p>
+            </li>
+            <li>
+              <h3>Поиск по вашим документам</h3>
+              <p>
+                Сотрудник задаёт вопрос обычными словами и получает ответ со ссылкой на регламент,
+                договор или инструкцию.
+              </p>
+            </li>
+            <li>
+              <h3>Сбор данных</h3>
+              <p>
+                Следим за ценами, объявлениями и каталогами, собираем всё в таблицу и предупреждаем,
+                когда что-то изменилось.
+              </p>
+            </li>
+            <li>
+              <h3>Интеграции и кабинеты</h3>
+              <p>
+                Связываем ваши сервисы между собой, а если готового решения нет — делаем свой
+                кабинет или панель.
+              </p>
+            </li>
+          </ul>
+          <p class="services__note">
+            Вашей задачи нет в списке? <a href="#contact">Расскажите о ней</a> — скажем честно,
+            можно ли её автоматизировать и стоит ли.
+          </p>
+        </div>
+      </section>
+
+      <section class="section bot" id="bot">
+        <div class="wrap bot__grid">
+          <div>
+            <h2>Бот-продавец Satushy</h2>
+            <p class="bot__lead">
+              Наш готовый продукт для магазинов. «Сатушы» по-казахски — продавец: он знает каждый
+              товар и отвечает покупателям в любое время. Подключаем под ключ.
+            </p>
+            <ul class="checks">
+              <li>Цены и остатки берёт только из вашего каталога.</li>
+              <li>Каждую сумму в ответе сверяет с каталогом до отправки.</li>
+              <li>Отвечает на русском и казахском, понимает голосовые сообщения.</li>
+              <li>Не знает ответа — не выдумывает, а зовёт менеджера.</li>
+              <li>Собирает заявку: товар, адрес, время — и передаёт её вам.</li>
+            </ul>
+            <a class="btn btn--glow" href="#contact">Подключить бота</a>
+          </div>
+
+          <div class="chat" role="img" aria-label="Пример переписки покупателя с ботом на русском и казахском">
+            <div class="chat__bar">
+              <span class="chat__dot"></span>
+              Цветы Пион
+              <small>отвечает бот</small>
+            </div>
+            <div class="chat__body">
+              <p class="msg msg--in">Есть розовые пионы до 35 000?</p>
+              <p class="msg msg--out">
+                Да, есть букет «Розовое утро»: 15 пионов, 32 000 ₸. В наличии 4 букета. Оформить
+                доставку?
+              </p>
+              <p class="msg msg--in">Ертеңге жеткізесіздер ме?</p>
+              <p class="msg msg--out">
+                Иә, ертең 10:00-ден 21:00-ге дейін жеткіземіз. Мекенжай мен уақытты жазыңыз.
+              </p>
+              <p class="msg msg--in">Абая 150, к 18:00</p>
+              <p class="msg msg--note">Заявка передана менеджеру: букет, адрес, время</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section process" id="process">
+        <div class="wrap">
+          <div class="section__head">
+            <h2>Как работаем</h2>
+            <p>Четыре шага от первого разговора до работающей системы.</p>
+          </div>
+          <ol class="steps">
+            <li>
+              <h3>Разбираем задачу</h3>
+              <p>Созваниваемся и смотрим, как работа делается сейчас и где теряется время.</p>
+            </li>
+            <li>
+              <h3>Называем срок и цену</h3>
+              <p>До начала работ. Если автоматизация не окупится, так и скажем.</p>
+            </li>
+            <li>
+              <h3>Показываем на ваших данных</h3>
+              <p>Сначала рабочий прототип на реальных примерах, потом доводим до готового.</p>
+            </li>
+            <li>
+              <h3>Запускаем и сопровождаем</h3>
+              <p>Подключаем к вашим каналам и системам, следим за работой и правим по ходу.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section faq" id="faq">
+        <div class="wrap faq__grid">
+          <h2>Частые вопросы</h2>
+          <div class="faq__list">
+            <details>
+              <summary>Сколько это стоит и сколько занимает?</summary>
+              <p>Зависит от задачи. Цену и срок называем после разбора, до начала работ.</p>
+            </details>
+            <details>
+              <summary>У нас нет программистов. Это проблема?</summary>
+              <p>
+                Нет. Мы всё делаем сами и объясняем без терминов. От вас нужны доступы и человек,
+                который знает, как работа устроена сейчас.
+              </p>
+            </details>
+            <details>
+              <summary>Бот отвечает на казахском?</summary>
+              <p>
+                Да. Бот отвечает на языке покупателя — на русском и казахском, в том числе на
+                голосовые сообщения.
+              </p>
+            </details>
+            <details>
+              <summary>А если бот ошибётся в цене?</summary>
+              <p>
+                Цены и остатки бот берёт только из вашего каталога и сверяет каждую сумму перед
+                отправкой. Не сошлось — ответ не уйдёт, а диалог перейдёт к менеджеру.
+              </p>
+            </details>
+            <details>
+              <summary>Что будет с нашими данными?</summary>
+              <p>Используем их только для вашей задачи и не передаём третьим лицам.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <div class="sunrise" aria-hidden="true"></div>
+
+      <section class="contact" id="contact">
+        <div class="wrap contact__grid">
+          <div class="contact__copy">
+            <h2>Расскажите, что хотите автоматизировать</h2>
+            <p>
+              Опишите задачу своими словами — как она делается сейчас и что мешает. Мы свяжемся с
+              вами по контакту, который вы оставите.
+            </p>
+          </div>
+
+          <form class="form" id="lead-form" novalidate>
+            <div class="field">
+              <label for="f-name">Как вас зовут</label>
+              <input id="f-name" name="name" type="text" autocomplete="name" maxlength="100" required />
+            </div>
+            <div class="field">
+              <label for="f-contact">Телефон, Telegram или почта</label>
+              <input
+                id="f-contact"
+                name="contact"
+                type="text"
+                autocomplete="tel"
+                maxlength="200"
+                required
+                aria-describedby="f-contact-hint"
+              />
+              <p class="field__hint" id="f-contact-hint">Напишем или позвоним туда, куда вам удобнее.</p>
+            </div>
+            <div class="field">
+              <label for="f-company">Компания <span class="optional">необязательно</span></label>
+              <input id="f-company" name="company" type="text" autocomplete="organization" maxlength="150" />
+            </div>
+            <div class="field">
+              <label for="f-task">Что нужно автоматизировать <span class="optional">необязательно</span></label>
+              <textarea id="f-task" name="task" rows="4" maxlength="3000"></textarea>
+            </div>
+            <div class="field field--trap" aria-hidden="true">
+              <label for="f-website">Не заполняйте это поле</label>
+              <input id="f-website" name="website" type="text" tabindex="-1" autocomplete="off" />
+            </div>
+            <button class="btn btn--ink" type="submit" id="lead-submit">Отправить заявку</button>
+            <p class="form__status" id="lead-status" role="status" aria-live="polite"></p>
+            <p class="form__legal">
+              Нажимая «Отправить заявку», вы соглашаетесь на обработку контактных данных для ответа
+              на заявку.
+            </p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer__row">
+        <span>© 2026 Satushy</span>
+        <span>Автоматизация и чат-боты для бизнеса в Казахстане</span>
+      </div>
+    </footer>
+  </body>
+</html>
