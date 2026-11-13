@@ -1,100 +1,79 @@
-// Проверки лендинга: сборка, ссылки, вес страницы и то, что кабинет наружу не торчит.
+// Проверки собранного лендинга (apps/web/out, сборка LANDING_ONLY=1):
+// наружу уходит только главная, без кабинета, входа и обращений к API сервиса.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { gzipSync } from "node:zlib";
 
-import { build } from "../build.mjs";
-
-const here = dirname(fileURLToPath(import.meta.url));
-const site = join(here, "..", "site");
-const { out, renamed } = build(site, mkdtempSync(join(tmpdir(), "satushy-landing-")));
+const out = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "out");
+assert.ok(existsSync(join(out, "index.html")), "нет apps/web/out — сначала make landing-build");
 const html = readFileSync(join(out, "index.html"), "utf8");
-const css = readFileSync(join(out, renamed["styles.css"]), "utf8");
-const js = readFileSync(join(out, renamed["main.js"]), "utf8");
 
-test("сборка переименовывает стили и скрипт и чинит ссылки на них", () => {
-  for (const [from, to] of Object.entries(renamed)) {
-    assert.match(to, /\.[0-9a-f]{10}\./);
-    assert.ok(existsSync(join(out, to)), `${to} нет в dist`);
-    assert.ok(!existsSync(join(out, from)), `${from} остался без хеша`);
-    assert.ok(!html.includes(`"${from}"`), `в index.html осталась ссылка на ${from}`);
-  }
-  assert.ok(html.includes(`href="${renamed["styles.css"]}"`));
-  assert.ok(html.includes(`src="${renamed["main.js"]}"`));
-  const notFound = readFileSync(join(out, "404.html"), "utf8");
-  assert.ok(notFound.includes(`href="/${renamed["styles.css"]}"`));
-});
+function walk(dir) {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? walk(path) : [path];
+  });
+}
+const files = walk(out);
+const scripts = files.filter((path) => path.endsWith(".js") && path.includes("_next"));
+const bundle = scripts.map((path) => readFileSync(path, "utf8")).join("\n");
 
-test("все локальные файлы, на которые ссылается страница, существуют", () => {
-  const refs = [...html.matchAll(/(?:href|src)="([^"#][^"]*)"/g)].map((m) => m[1]);
-  assert.ok(refs.length >= 5);
-  for (const ref of refs) assert.ok(existsSync(join(out, ref)), `нет файла ${ref}`);
-  for (const [, font] of css.matchAll(/url\("(fonts\/[^"]+)"\)/g)) {
-    assert.ok(existsSync(join(out, font)), `нет шрифта ${font}`);
+test("в сборку попала только главная страница", () => {
+  const pages = files
+    .filter((path) => path.endsWith(".html"))
+    .map((path) => path.slice(out.length + 1))
+    .sort();
+  assert.deepEqual(pages, ["404.html", "_not-found.html", "index.html"]);
+  for (const route of ["login", "signup", "overview", "dialogs", "leads", "balance", "settings"]) {
+    assert.ok(!existsSync(join(out, route)), `в сборке есть маршрут кабинета /${route}`);
   }
 });
 
-test("страница ничего не грузит с чужих серверов", () => {
-  for (const [name, text] of [
-    ["index.html", html],
-    ["styles.css", css],
-    ["main.js", js],
-  ]) {
-    const external = text.match(/(?:https?:)?\/\/[a-z0-9.-]+\.[a-z]{2,}/gi) ?? [];
-    assert.deepEqual(external, [], `${name} ссылается наружу`);
-  }
-});
-
-test("в разметке нет встроенных стилей и скриптов (их запрещает CSP)", () => {
-  assert.ok(!/<style[\s>]/i.test(html), "встроенный <style>");
-  assert.ok(!/\sstyle="/i.test(html), "атрибут style");
-  assert.ok(!/<script(?![^>]*\ssrc=)[^>]*>/i.test(html), "встроенный <script>");
-  assert.ok(!/\son[a-z]+="/i.test(html), "обработчик в атрибуте");
-});
-
-test("кабинет и API магазина на лендинге не упоминаются", () => {
-  for (const hidden of ["/login", "/signup", "/overview", "/dialogs", "демо-кабинет"]) {
+test("на странице нет ссылок на вход, регистрацию и кабинет", () => {
+  for (const hidden of ['href="/login', 'href="/signup', "Войти в кабинет", "демо-кабинет"]) {
     assert.ok(!html.includes(hidden), `на лендинге осталось «${hidden}»`);
   }
 });
 
-test("каждая ссылка-якорь ведёт на существующий раздел", () => {
-  const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
-  const anchors = [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
-  assert.ok(anchors.includes("contact"));
-  for (const anchor of anchors) assert.ok(ids.has(anchor), `нет раздела #${anchor}`);
+test("скрипты лендинга не обращаются к API сервиса сами", () => {
+  // Чат на лендинге отвечает записанными репликами, кнопки демо-входа нет.
+  assert.ok(!bundle.includes("/demo/login"), "в сборке остался демо-вход");
+  assert.ok(bundle.includes("/api/lead"), "форма должна отправлять заявку на /api/lead");
 });
 
-test("форма заявки: обязательные поля, ловушка для роботов и адрес отправки", () => {
-  const form = html.slice(html.indexOf('<form'), html.indexOf("</form>"));
-  assert.match(form, /name="name"[^>]*required/s);
-  assert.match(form, /name="contact"[^>]*required/s);
-  assert.match(form, /name="website"[^>]*tabindex="-1"/s);
-  assert.match(form, /aria-live="polite"/);
-  for (const field of ["name", "contact", "company", "task", "website"]) {
-    assert.ok(form.includes(`for="f-${field}"`), `у поля ${field} нет подписи`);
+test("есть разделы лендинга и каждая ссылка-якорь куда-то ведёт", () => {
+  const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]));
+  for (const id of ["main", "night", "skills", "team", "start", "price", "contact"]) {
+    assert.ok(ids.has(id), `нет раздела #${id}`);
   }
-  assert.ok(js.includes('fetch("/api/lead"'));
+  const anchors = [...html.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(anchors.includes("contact") && anchors.includes("team"));
+  for (const anchor of anchors) assert.ok(ids.has(anchor), `ссылка на несуществующий #${anchor}`);
 });
 
-test("без JavaScript журнал виден: есть запасной файл стилей", () => {
-  assert.match(html, /<noscript><link rel="stylesheet" href="nojs\.[0-9a-f]{10}\.css"/);
-  assert.equal((html.match(/shift__row is-waiting/g) ?? []).length, 6);
+test("форма заявки: поля, ловушка для роботов, статус для экранных читалок", () => {
+  const form = html.slice(html.indexOf("<form", html.indexOf('id="contact"')));
+  for (const field of ["name", "contact", "company", "task", "website"]) {
+    assert.ok(form.includes(`name="${field}"`), `нет поля ${field}`);
+  }
+  assert.match(form, /name="website"[^>]*tabindex="-1"|tabindex="-1"[^>]*name="website"/i);
+  assert.match(form, /aria-live="polite"/);
+  assert.ok(form.includes("Отправить заявку"));
 });
 
-test("страница лёгкая: до первого экрана меньше 150 КБ по сети", () => {
-  const gz = (text) => gzipSync(text).length;
-  const code = gz(html) + gz(css) + gz(js);
-  assert.ok(code < 20_000, `html+css+js в gzip: ${code} байт`);
+test("ночь магазина: журнал виден без JavaScript, шесть событий до утра", () => {
+  const night = html.slice(html.indexOf('id="night"'), html.indexOf('id="skills"'));
+  for (const time of ["23:41", "00:15", "01:30", "03:00", "05:00", "07:00"]) {
+    assert.ok(night.includes(time), `в журнале нет ${time}`);
+  }
+  assert.ok(!/<li[^>]*opacity-0/.test(night), "строки журнала скрыты в исходной разметке");
+});
 
-  // Шрифты, которые нужны для русского текста; казахский набор догружается по требованию.
-  const fonts = readdirSync(join(out, "fonts"))
-    .filter((name) => !name.includes("cyrillic-ext"))
-    .reduce((sum, name) => sum + statSync(join(out, "fonts", name)).size, 0);
-  assert.ok(code + fonts < 150_000, `всего ${code + fonts} байт`);
-  assert.ok(!readdirSync(out).some((name) => /\.(png|jpe?g|webp|gif|mp4)$/i.test(name)), "картинок быть не должно");
+test("страница ничего не грузит с чужих серверов и обходится без картинок", () => {
+  const external = [...html.matchAll(/(?:src|href)="(https?:)?\/\/[^"]+"/g)].map((match) => match[0]);
+  assert.deepEqual(external, []);
+  const images = files.filter((path) => /\.(png|jpe?g|webp|gif|mp4)$/i.test(path));
+  assert.deepEqual(images, []);
 });

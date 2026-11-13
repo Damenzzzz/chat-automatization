@@ -37,6 +37,3 @@ apps/ml/.models/
 
 .playwright-mcp/
 backups/
-
-# лендинг: результат сборки
-apps/landing/dist/

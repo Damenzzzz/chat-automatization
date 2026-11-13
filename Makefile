@@ -72,12 +72,12 @@ backup: ## Дамп базы в backups/ (нужен make up); восстано�
 	$(COMPOSE) exec -T postgres sh -c 'pg_dump -Fc -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/satushy-$$(date +%Y%m%d-%H%M%S).dump
 	@ls -lh backups | tail -1
 
-landing-test: ## Тесты и линтер лендинга (сайт и функция заявок), сервисы не нужны
+landing-test: landing-build ## Тесты лендинга (собранный сайт и функция заявок), сервисы не нужны
 	node --test apps/landing/tests/site.test.mjs
 	cd apps/landing && $(LANDING_PY) sh -c 'ruff check lambda && ruff format --check lambda && pytest lambda -q'
 
-landing-build: ## Собрать лендинг в apps/landing/dist
-	node apps/landing/build.mjs
+landing-build: ## Собрать статический лендинг в apps/web/out (без кабинета и API)
+	$(WEB) LANDING_ONLY=1 NEXT_TELEMETRY_DISABLED=1 npx next build
 
 landing-deploy: landing-test ## Развернуть лендинг в AWS; первый раз: make landing-deploy LEADS_EMAIL=you@example.com
 	LEADS_EMAIL=$(LEADS_EMAIL) infra/landing/deploy.sh

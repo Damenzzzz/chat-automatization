@@ -2,7 +2,27 @@ import type { NextConfig } from "next";
 
 const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8100";
 
-const nextConfig: NextConfig = {
+// LANDING_ONLY=1 собирает один статический лендинг: маршрутами считаются только
+// файлы *.landing.tsx, поэтому кабинет, вход и proxy.ts в сборку не попадают (ADR 0012).
+const landingOnly = process.env.LANDING_ONLY === "1";
+
+const turbopack: NextConfig["turbopack"] = {
+  rules: {
+    "*.css": {
+      loaders: ["@tailwindcss/turbopack"],
+      as: "*.css",
+    },
+  },
+};
+
+const landingConfig: NextConfig = {
+  output: "export",
+  distDir: "out",
+  pageExtensions: ["landing.tsx"],
+  turbopack,
+};
+
+const serviceConfig: NextConfig = {
   output: "standalone",
   experimental: { proxyTimeout: 300_000 },
   async headers() {
@@ -27,14 +47,7 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
+  turbopack,
 };
 
-export default nextConfig;
+export default landingOnly ? landingConfig : serviceConfig;

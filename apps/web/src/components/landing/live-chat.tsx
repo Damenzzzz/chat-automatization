@@ -25,6 +25,38 @@ const SUGGESTIONS = [
   "Сколько стоит доставка?",
 ];
 
+type Canned = { text: string; cards: Schemas["DemoCard"][] };
+
+function card(id: string, name: string, price: number, stock: number): Schemas["DemoCard"] {
+  return { id, name, sku: null, price, stock, category: null };
+}
+
+/** Ответы для лендинга без сервера: тот же демо-магазин, заранее записанные реплики. */
+const CANNED: Record<string, Canned> = {
+  "Есть розовые пионы до 35 000?": {
+    text: "Да, есть букет «Розовое утро»: 15 розовых пионов за 32 000 ₸, в наличии 4 букета. Оформить доставку?",
+    cards: [card("canned-1", "Розовое утро, 15 пионов", 32000, 4)],
+  },
+  "51 раушан қанша тұрады?": {
+    text: "51 қызыл раушан — 45 000 ₸, қазір 6 букет бар. Жеткізуді рәсімдейін бе?",
+    cards: [card("canned-2", "51 красная роза", 45000, 6)],
+  },
+  "Анама гүл керек, 25 мыңға дейін": {
+    text: "Анаңызға екі букет ұсынамын: «Нәзік» — 23 500 ₸ және «Көктем» — 19 000 ₸. Екеуі де бар.",
+    cards: [
+      card("canned-3", "Нәзік, розы и эустома", 23500, 3),
+      card("canned-4", "Көктем, тюльпаны", 19000, 7),
+    ],
+  },
+  "Сколько стоит доставка?": {
+    text: "По Алматы доставка стоит 2 000 ₸, при заказе от 30 000 ₸ — бесплатно. Привозим с 10:00 до 21:00.",
+    cards: [],
+  },
+};
+
+const CANNED_FALLBACK =
+  "Это пример без подключения к настоящему магазину. Оставьте заявку внизу страницы — покажем бота на вашем каталоге.";
+
 function keepNumbers(text: string): string {
   return text.replace(/(\d) (?=\d{3}\b)/g, "$1\u00a0").replace(/ ₸/g, "\u00a0₸");
 }
@@ -64,7 +96,13 @@ function Card({ card }: { card: Schemas["DemoCard"] }) {
   );
 }
 
-export function LiveChat({ className }: { className?: string }) {
+export function LiveChat({
+  className,
+  offline = false,
+}: {
+  className?: string;
+  offline?: boolean;
+}) {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,6 +134,14 @@ export function LiveChat({ className }: { className?: string }) {
     setBusy(true);
     const slowTimer = setTimeout(() => setSlow(true), 3500);
     try {
+      if (offline) {
+        // Сервера нет: отвечаем записанной репликой с паузой, как будто бот печатает.
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        const canned = CANNED[clean];
+        if (canned) push({ from: "bot", text: keepNumbers(canned.text), cards: canned.cards });
+        else push({ from: "note", text: CANNED_FALLBACK });
+        return;
+      }
       const reply = await unwrap(
         api.POST("/demo/chat", { body: { message: clean, session_id: session.current } }),
       );
@@ -141,7 +187,7 @@ export function LiveChat({ className }: { className?: string }) {
             </span>
           </span>
           <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-paper/80">
-            демо
+            {offline ? "пример" : "демо"}
           </span>
         </header>
 
