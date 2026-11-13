@@ -121,6 +121,8 @@ async def search_products(
         if f.id in products
         and passes(filters, products[f.id].price, products[f.id].stock, products[f.id].category)
     ]
+    # Точный артикул остаётся в отборе, даже если по тексту он ниже границы.
+    pool.sort(key=lambda f: f.id not in exact)
     pool = pool[: settings.search_rerank_top]
 
     scores: list[float] | None = None

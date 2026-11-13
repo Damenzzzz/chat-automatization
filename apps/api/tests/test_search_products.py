@@ -4,6 +4,7 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.core.config import get_settings
 from app.db.session import tenant_session
 from app.search import ProductFilters, search_products
 from app.search.fusion import rrf
@@ -158,3 +159,17 @@ async def test_rerank_failure_falls_back_to_rrf(shop: uuid.UUID) -> None:
         plain = await search_products(session, "розовые пионы", ml=FakeML(), use_reranker=False)
     assert [h.id for h in result.items] == [h.id for h in plain.items]
     assert all(h.score is None for h in result.items)
+
+
+async def test_exact_sku_survives_a_small_rerank_pool(
+    shop: uuid.UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wanted = _catalog()[42]
+    flower = next(f for f in FLOWERS if f.capitalize() != wanted["category"])
+    color = next(c for c in COLORS if c not in str(wanted["name"]))
+    monkeypatch.setattr(get_settings(), "search_rerank_top", 3)
+    async with tenant_session(shop) as session:
+        result = await search_products(
+            session, f"FL-042 {color} {flower} букет в упаковке", ml=FakeML(), record=False
+        )
+    assert result.items[0].sku == "FL-042"
