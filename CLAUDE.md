@@ -168,12 +168,12 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Примитивы — `components/ui`, свои, на нативных `button`, `label`, `select`, `dialog`. Новый шрифт проверять по таблице символов: `ә ғ қ ң ө ұ ү һ і` и ₸.
 - Новые страницы в запущенном `next dev` могут отдавать 404 до перезапуска. Новая зависимость в контейнере — `make up` (пересоздаёт анонимный том `node_modules`).
 
-## Лендинг (apps/landing)
+## Лендинг
 
-- Сайт команды: статические `site/index.html`, `styles.css`, `main.js` без фреймворка. Наружу развёрнут только он; кабинет и API на нём не упоминаются (ADR 0012).
-- Встроенных стилей и скриптов быть не должно: их запрещает CSP из `infra/landing/stack.yaml`.
-- Форма шлёт `POST /api/lead` → CloudFront → API Gateway → `lambda/handler.py` → файл в S3 и письмо через SNS. Текст заявки и контакты в логи не писать.
-- Проверка: `make landing-test`. Выкладка: `make landing-deploy`. Адрес для заявок — только через `LEADS_EMAIL`, в репозиторий не класть.
+- Один компонент `apps/web/src/components/landing/landing-page.tsx` на два случая: страница сервиса (`app/page.tsx`) и отдельный сайт команды (`app/page.landing.tsx`, проп `standalone`). Наружу сейчас развёрнут только второй (ADR 0012).
+- Сборка отдельного сайта: `LANDING_ONLY=1` → `output: "export"` в `apps/web/out`; маршруты — только файлы `*.landing.tsx`, кабинет и `proxy.ts` в неё не попадают. Код, которому нужен API (демо-вход), в `landing-page.tsx` не импортировать — передавать с `app/page.tsx` пропом.
+- В `standalone` чат отвечает записанными репликами (`LiveChat offline`), вместо входа — форма `contact-form.tsx`: `POST /api/lead` → CloudFront → API Gateway → `apps/landing/lambda/handler.py` → файл в S3 и письмо через SNS. Текст заявки и контакты в логи не писать.
+- Проверка: `make landing-test` (собирает сайт, проверяет его и функцию заявок). Выкладка: `make landing-deploy`. Адрес для заявок — только через `LEADS_EMAIL`, в репозиторий не класть.
 
 ## Демо-режим
 
