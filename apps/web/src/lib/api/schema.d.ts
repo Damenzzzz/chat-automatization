@@ -448,6 +448,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bot-profile/preset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Preset */
+        post: operations["apply_preset_bot_profile_preset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bot-profile/rollback": {
         parameters: {
             query?: never;
@@ -459,6 +476,23 @@ export interface paths {
         put?: never;
         /** Rollback */
         post: operations["rollback_bot_profile_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/niches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Niches */
+        get: operations["list_niches_niches_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -737,6 +771,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tags */
+        get: operations["list_tags_conversations_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/stream": {
         parameters: {
             query?: never;
@@ -768,7 +819,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Assign */
+        patch: operations["assign_conversations__conversation_id__patch"];
         trace?: never;
     };
     "/conversations/{conversation_id}/takeover": {
@@ -873,6 +925,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/leads/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Leads */
+        get: operations["export_leads_leads_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leads/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk Update */
+        post: operations["bulk_update_leads_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leads/{lead_id}": {
         parameters: {
             query?: never;
@@ -888,6 +974,142 @@ export interface paths {
         head?: never;
         /** Update Lead */
         patch: operations["update_lead_leads__lead_id__patch"];
+        trace?: never;
+    };
+    "/automations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Automations */
+        get: operations["list_automations_automations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automations/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Automation */
+        put: operations["save_automation_automations__kind__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automations/{kind}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Automation */
+        post: operations["preview_automation_automations__kind__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automations/{kind}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Automation */
+        post: operations["run_automation_automations__kind__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automations/{kind}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs */
+        get: operations["list_runs_automations__kind__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/followups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Followups */
+        get: operations["list_followups_followups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/followups/{followup_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Followup */
+        post: operations["send_followup_followups__followup_id__send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/followups/{followup_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Followup */
+        post: operations["reject_followup_followups__followup_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/products": {
@@ -1083,6 +1305,41 @@ export interface components {
             /** Resolved */
             resolved: number;
         };
+        /** AssignIn */
+        AssignIn: {
+            /** Assignee Id */
+            assignee_id: string | null;
+        };
+        /** AutomationIn */
+        AutomationIn: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** AutomationOut */
+        AutomationOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "digest" | "stock" | "followup" | "lead_reminders";
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Settings */
+            settings: components["schemas"]["DigestSettings"] | components["schemas"]["StockSettings"] | components["schemas"]["FollowupSettings"] | components["schemas"]["LeadReminderSettings"];
+            /** Last Run At */
+            last_run_at: string | null;
+            last_run: components["schemas"]["RunOut"] | null;
+            /** Pending */
+            pending: number;
+        };
         /** AutotestIn */
         AutotestIn: {
             /**
@@ -1110,6 +1367,20 @@ export interface components {
             file: string;
             /** Source Id */
             source_id?: string | null;
+        };
+        /** BulkIn */
+        BulkIn: {
+            /** Ids */
+            ids: string[];
+            /** Status */
+            status?: ("new" | "in_progress" | "done" | "cancelled") | null;
+            /** Assignee Id */
+            assignee_id?: string | null;
+        };
+        /** BulkOut */
+        BulkOut: {
+            /** Updated */
+            updated: number;
         };
         /** CardOut */
         CardOut: {
@@ -1297,6 +1568,12 @@ export interface components {
             waiting: boolean;
             /** Lead Status */
             lead_status: string | null;
+            /** Assignee Id */
+            assignee_id: string | null;
+            /** Assignee Name */
+            assignee_name: string | null;
+            /** Tags */
+            tags: string[];
             /** Messages */
             messages: components["schemas"]["MessageOut"][];
             /** Leads */
@@ -1342,6 +1619,12 @@ export interface components {
             waiting: boolean;
             /** Lead Status */
             lead_status: string | null;
+            /** Assignee Id */
+            assignee_id: string | null;
+            /** Assignee Name */
+            assignee_name: string | null;
+            /** Tags */
+            tags: string[];
         };
         /** Counts */
         Counts: {
@@ -1355,11 +1638,17 @@ export interface components {
             leads: number;
             /** Waiting */
             waiting: number;
+            /** Mine */
+            mine: number;
+            /** Unassigned */
+            unassigned: number;
         };
         /** CustomerIn */
         CustomerIn: {
             /** Note */
             note?: string | null;
+            /** Tags */
+            tags?: string[] | null;
         };
         /** CustomerOut */
         CustomerOut: {
@@ -1378,6 +1667,8 @@ export interface components {
             lang: string | null;
             /** Note */
             note: string | null;
+            /** Tags */
+            tags: string[];
             /**
              * First Seen At
              * Format: date-time
@@ -1467,12 +1758,94 @@ export interface components {
              */
             shop_name: string;
         };
+        /** DigestSettings */
+        DigestSettings: {
+            /**
+             * Hour
+             * @default 9
+             */
+            hour: number;
+            /** Weekdays */
+            weekdays?: number[];
+            /** Sections */
+            sections?: ("dialogs" | "leads" | "money" | "waiting" | "unanswered" | "stock")[];
+            /**
+             * Recipients
+             * @default owner
+             * @enum {string}
+             */
+            recipients: "owner" | "team";
+        };
         /** DraftOut */
         DraftOut: {
             /** Text */
             text: string;
             /** Verified */
             verified: boolean;
+        };
+        /** FollowupOut */
+        FollowupOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /** Customer Name */
+            customer_name: string | null;
+            /** Channel */
+            channel: string | null;
+            /** Text */
+            text: string;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Sent At */
+            sent_at: string | null;
+        };
+        /** FollowupSendIn */
+        FollowupSendIn: {
+            /** Text */
+            text?: string | null;
+        };
+        /** FollowupSettings */
+        FollowupSettings: {
+            /**
+             * Delay Hours
+             * @default 3
+             */
+            delay_hours: number;
+            /**
+             * Mode
+             * @default approve
+             * @enum {string}
+             */
+            mode: "approve" | "auto";
+            /**
+             * Text
+             * @default Здравствуйте! Вы недавно спрашивали у нас про товар. Подсказать что-нибудь ещё или помочь оформить заказ?
+             */
+            text: string;
+            /** Channels */
+            channels?: ("telegram" | "whatsapp" | "web")[];
+            /**
+             * Quiet From
+             * @default 21
+             */
+            quiet_from: number;
+            /**
+             * Quiet To
+             * @default 9
+             */
+            quiet_to: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1590,10 +1963,39 @@ export interface components {
              */
             created_at: string;
         };
+        /** LeadCounts */
+        LeadCounts: {
+            /** New */
+            new: number;
+            /** In Progress */
+            in_progress: number;
+            /** Done */
+            done: number;
+            /** Cancelled */
+            cancelled: number;
+            /** Overdue */
+            overdue: number;
+            /** Mine */
+            mine: number;
+        };
+        /** LeadIn */
+        LeadIn: {
+            /** Status */
+            status?: ("new" | "in_progress" | "done" | "cancelled") | null;
+            /** Assignee Id */
+            assignee_id?: string | null;
+            /** Cancel Reason */
+            cancel_reason?: ("price" | "no_stock" | "no_answer" | "changed_mind" | "duplicate" | "other") | null;
+            /** Remind At */
+            remind_at?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /** LeadList */
         LeadList: {
             /** Items */
             items: components["schemas"]["LeadRow"][];
+            counts: components["schemas"]["LeadCounts"];
             /** Next Before */
             next_before: string | null;
         };
@@ -1604,6 +2006,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Number */
+            number: string;
             /** Conversation Id */
             conversation_id: string | null;
             /** Items */
@@ -1624,11 +2028,40 @@ export interface components {
             comment: string | null;
             /** Status */
             status: string;
+            /** Assignee Id */
+            assignee_id: string | null;
+            /** Assignee Name */
+            assignee_name: string | null;
+            /** Cancel Reason */
+            cancel_reason: string | null;
+            /** Remind At */
+            remind_at: string | null;
+            /** Note */
+            note: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** LeadReminderSettings */
+        LeadReminderSettings: {
+            /**
+             * Hours
+             * @default 2
+             */
+            hours: number;
+            /**
+             * Recipients
+             * @default team
+             * @enum {string}
+             */
+            recipients: "owner" | "team";
         };
         /** LeadRow */
         LeadRow: {
@@ -1637,6 +2070,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Number */
+            number: string;
             /** Conversation Id */
             conversation_id: string | null;
             /** Items */
@@ -1657,21 +2092,30 @@ export interface components {
             comment: string | null;
             /** Status */
             status: string;
+            /** Assignee Id */
+            assignee_id: string | null;
+            /** Assignee Name */
+            assignee_name: string | null;
+            /** Cancel Reason */
+            cancel_reason: string | null;
+            /** Remind At */
+            remind_at: string | null;
+            /** Note */
+            note: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
             /** Channel */
             channel: string | null;
-        };
-        /** LeadStatusIn */
-        LeadStatusIn: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "new" | "in_progress" | "done" | "cancelled";
+            /** Tags */
+            tags: string[];
         };
         /** MappingProposal */
         MappingProposal: {
@@ -1810,6 +2254,23 @@ export interface components {
             /** Output Per M */
             output_per_m: string;
         };
+        /** NicheOut */
+        NicheOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Hint */
+            hint: string;
+            /** Tone */
+            tone: string;
+            /** Greeting */
+            greeting: string;
+            /** Rules */
+            rules: {
+                [key: string]: unknown;
+            };
+        };
         /** NotificationOut */
         NotificationOut: {
             /**
@@ -1841,6 +2302,39 @@ export interface components {
             change_percent: {
                 [key: string]: number | null;
             };
+        };
+        /** PresetIn */
+        PresetIn: {
+            /** Niche */
+            niche: string;
+        };
+        /** Preview */
+        Preview: {
+            /** Summary */
+            summary: string;
+            /** Text */
+            text?: string | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["PreviewItem"][];
+        };
+        /** PreviewIn */
+        PreviewIn: {
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** PreviewItem */
+        PreviewItem: {
+            /** Title */
+            title: string;
+            /** Detail */
+            detail?: string | null;
+            /** Href */
+            href?: string | null;
         };
         /** PricingIn */
         PricingIn: {
@@ -1973,6 +2467,31 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** RunOut */
+        RunOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Trigger */
+            trigger: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** SessionOut */
         SessionOut: {
             /**
@@ -2055,6 +2574,34 @@ export interface components {
             city?: string | null;
             /** Niche */
             niche?: string | null;
+        };
+        /** StockSettings */
+        StockSettings: {
+            /**
+             * Threshold
+             * @default 3
+             */
+            threshold: number;
+            /**
+             * Include Out Of Stock
+             * @default true
+             */
+            include_out_of_stock: boolean;
+            /** Categories */
+            categories?: string[];
+            /**
+             * Recipients
+             * @default owner
+             * @enum {string}
+             */
+            recipients: "owner" | "team";
+        };
+        /** TagCount */
+        TagCount: {
+            /** Tag */
+            tag: string;
+            /** Count */
+            count: number;
         };
         /** TelegramIn */
         TelegramIn: {
@@ -3137,6 +3684,41 @@ export interface operations {
             };
         };
     };
+    apply_preset_bot_profile_preset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     rollback_bot_profile_rollback_post: {
         parameters: {
             query?: never;
@@ -3168,6 +3750,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_niches_niches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NicheOut"][];
                 };
             };
         };
@@ -3677,10 +4279,11 @@ export interface operations {
     list_conversations_conversations_get: {
         parameters: {
             query?: {
-                filter?: "all" | "bot" | "human" | "leads";
+                filter?: "all" | "bot" | "human" | "leads" | "mine" | "unassigned";
                 limit?: number;
                 before?: string | null;
                 q?: string | null;
+                tag?: string | null;
             };
             header?: never;
             path?: never;
@@ -3697,6 +4300,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tags_conversations_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCount"][];
                 };
             };
             /** @description Validation Error */
@@ -3761,6 +4395,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_conversations__conversation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationRow"];
                 };
             };
             /** @description Validation Error */
@@ -3951,6 +4622,10 @@ export interface operations {
         parameters: {
             query?: {
                 status?: ("new" | "in_progress" | "done" | "cancelled") | null;
+                assignee?: string | null;
+                channel?: ("whatsapp" | "instagram" | "telegram" | "web") | null;
+                q?: string | null;
+                due?: boolean;
                 limit?: number;
                 before?: string | null;
             };
@@ -3982,6 +4657,77 @@ export interface operations {
             };
         };
     };
+    export_leads_leads_export_get: {
+        parameters: {
+            query?: {
+                status?: ("new" | "in_progress" | "done" | "cancelled") | null;
+                assignee?: string | null;
+                channel?: ("whatsapp" | "instagram" | "telegram" | "web") | null;
+                q?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_update_leads_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_lead_leads__lead_id__patch: {
         parameters: {
             query?: never;
@@ -3995,7 +4741,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LeadStatusIn"];
+                "application/json": components["schemas"]["LeadIn"];
             };
         };
         responses: {
@@ -4006,6 +4752,283 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_automations_automations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_automation_automations__kind__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "digest" | "stock" | "followup" | "lead_reminders";
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutomationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_automation_automations__kind__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "digest" | "stock" | "followup" | "lead_reminders";
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PreviewIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_automation_automations__kind__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "digest" | "stock" | "followup" | "lead_reminders";
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_runs_automations__kind__runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                kind: "digest" | "stock" | "followup" | "lead_reminders";
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_followups_followups_get: {
+        parameters: {
+            query?: {
+                status?: ("pending" | "sent" | "rejected" | "expired" | "failed") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowupOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_followup_followups__followup_id__send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                followup_id: string;
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FollowupSendIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_followup_followups__followup_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                followup_id: string;
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowupOut"];
                 };
             };
             /** @description Validation Error */
