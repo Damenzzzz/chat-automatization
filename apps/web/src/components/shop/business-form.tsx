@@ -2,13 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 
-import { NICHES } from "@/components/auth/auth-flow";
 import { Button } from "@/components/ui/button";
 import { SelectField, TextField } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { FormError } from "@/components/ui/page";
 import { api, type Schemas } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/errors";
+import { useNiches } from "@/lib/niches";
 
 export function BusinessForm({
   shop,
@@ -21,6 +21,7 @@ export function BusinessForm({
   onDone: (shop: Schemas["ShopOut"]) => void;
   showSaved?: boolean;
 }) {
+  const { titles } = useNiches();
   const [name, setName] = useState(shop.name);
   const [niche, setNiche] = useState(shop.niche ?? "");
   const [city, setCity] = useState(shop.city ?? "");
@@ -86,7 +87,7 @@ export function BusinessForm({
           onChange={(event) => setNiche(event.target.value)}
         >
           <option value="">Выберите</option>
-          {[...new Set([...NICHES, ...(shop.niche ? [shop.niche] : [])])].map((item) => (
+          {[...new Set([...titles, ...(shop.niche ? [shop.niche] : [])])].map((item) => (
             <option key={item}>{item}</option>
           ))}
         </SelectField>

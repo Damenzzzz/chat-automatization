@@ -12,16 +12,7 @@ import { FormError } from "@/components/ui/page";
 import { api, authApi } from "@/lib/api/client";
 import { ApiError, unwrap } from "@/lib/api/errors";
 import { parseIdentity, safeNext, type Identity } from "@/lib/identity";
-
-export const NICHES = [
-  "Цветы и подарки",
-  "Автозапчасти",
-  "Электроника",
-  "Одежда и обувь",
-  "Косметика",
-  "Стройматериалы",
-  "Другое",
-];
+import { useNiches } from "@/lib/niches";
 
 const RESEND_SECONDS = 30;
 
@@ -58,6 +49,7 @@ function CodeInput({
 }
 
 function ShopFields({ shop, onChange }: { shop: Shop; onChange: (shop: Shop) => void }) {
+  const { titles } = useNiches();
   return (
     <>
       <TextField
@@ -75,7 +67,7 @@ function ShopFields({ shop, onChange }: { shop: Shop; onChange: (shop: Shop) => 
         onChange={(event) => onChange({ ...shop, niche: event.target.value })}
       >
         <option value="">Выберите</option>
-        {NICHES.map((niche) => (
+        {titles.map((niche) => (
           <option key={niche}>{niche}</option>
         ))}
       </SelectField>

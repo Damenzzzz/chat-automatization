@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
+import { NichePreset } from "@/components/bot/niche-preset";
 import { PROFILE_KEY, ProfileForm } from "@/components/bot/profile-form";
 import { Autotest, SandboxChat } from "@/components/bot/sandbox";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ export function BotView() {
       </PageHeader>
       <div className="grid gap-x-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Section title="Характер">
+          <NichePreset onApplied={() => void mutate("/bot-profile/versions")} />
           <ProfileForm onSaved={() => void mutate("/bot-profile/versions")} />
         </Section>
         <div className="min-w-0">
