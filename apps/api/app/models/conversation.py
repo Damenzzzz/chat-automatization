@@ -17,13 +17,14 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy import text as sql_text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, IdMixin, TenantMixin, TimestampMixin
 from app.models.tenant import CHANNEL_TYPES
 
 LANGS = "('ru', 'kk', 'mixed')"
+CANCEL_REASONS = ("price", "no_stock", "no_answer", "changed_mind", "duplicate", "other")
 
 
 class Customer(IdMixin, TimestampMixin, TenantMixin, Base):
@@ -40,6 +41,7 @@ class Customer(IdMixin, TimestampMixin, TenantMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(32))
     lang: Mapped[str | None] = mapped_column(String(8))
     note: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String(40)), server_default=sql_text("'{}'"))
 
 
 class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):
@@ -71,6 +73,9 @@ class Conversation(IdMixin, TimestampMixin, TenantMixin, Base):
     sandbox: Mapped[bool] = mapped_column(Boolean, server_default=sql_text("false"))
     paused_reason: Mapped[str | None] = mapped_column(String(16))
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
 
 
 class Message(IdMixin, TimestampMixin, TenantMixin, Base):
@@ -102,8 +107,12 @@ class Lead(IdMixin, TimestampMixin, TenantMixin, Base):
     __table_args__ = (
         CheckConstraint("status IN ('new', 'in_progress', 'done', 'cancelled')", name="status"),
         CheckConstraint("total_kzt >= 0", name="total_kzt"),
+        CheckConstraint(f"cancel_reason IN {CANCEL_REASONS}", name="cancel_reason"),
         Index("ix_leads_tenant_id_created_at", "tenant_id", "created_at"),
         Index("ix_leads_tenant_id_updated_at", "tenant_id", "updated_at"),
+        Index(
+            "ix_leads_remind_at", "remind_at", postgresql_where=sql_text("remind_at IS NOT NULL")
+        ),
     )
 
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -118,6 +127,12 @@ class Lead(IdMixin, TimestampMixin, TenantMixin, Base):
     delivery_note: Mapped[str | None] = mapped_column(Text)
     comment: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), server_default="new")
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    cancel_reason: Mapped[str | None] = mapped_column(String(16))
+    remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text)
 
 
 class Unanswered(IdMixin, TimestampMixin, TenantMixin, Base):

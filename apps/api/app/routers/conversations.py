@@ -27,14 +27,16 @@ from app.core.redis import get_redis
 from app.db.session import tenant_session
 from app.llm import LLM, LLMError, get_llm
 from app.mlclient import MLClient, get_ml_client
-from app.models import Channel, Conversation, Customer, Lead, Message, Product
-from app.routers.leads import LeadOut, lead_out
+from app.models import Channel, Conversation, Customer, Lead, Message, Product, User
+from app.routers.leads import USER_LABEL, LeadOut, ensure_member, lead_out, member_names
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 log = structlog.get_logger()
 
 Member = Annotated[Principal, Depends(require_role("owner", "manager"))]
-Filter = Literal["all", "bot", "human", "leads"]
+Filter = Literal["all", "bot", "human", "leads", "mine", "unassigned"]
+MAX_TAGS = 10
+TAG_LENGTH = 30
 MAX_MESSAGES = 200
 CUSTOMER_LEADS = 5
 DRAFTS_PER_HOUR = 60
@@ -62,6 +64,9 @@ class ConversationRow(BaseModel):
     preview_role: str | None
     waiting: bool
     lead_status: str | None
+    assignee_id: uuid.UUID | None
+    assignee_name: str | None
+    tags: list[str]
 
 
 class Counts(BaseModel):
@@ -70,6 +75,8 @@ class Counts(BaseModel):
     human: int
     leads: int
     waiting: int
+    mine: int
+    unassigned: int
 
 
 class ConversationList(BaseModel):
@@ -116,6 +123,7 @@ class CustomerOut(BaseModel):
     channel: str
     lang: str | None
     note: str | None
+    tags: list[str]
     first_seen_at: datetime
     dialogs: int
     leads: list[LeadBrief]
@@ -129,6 +137,25 @@ class ConversationDetail(ConversationRow):
 
 class CustomerIn(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
+    tags: list[Annotated[str, Field(max_length=100)]] | None = Field(default=None, max_length=50)
+
+
+class AssignIn(BaseModel):
+    assignee_id: uuid.UUID | None
+
+
+class TagCount(BaseModel):
+    tag: str
+    count: int
+
+
+def clean_tags(tags: list[str]) -> list[str]:
+    seen: dict[str, str] = {}
+    for tag in tags:
+        text = " ".join(tag.split())[:TAG_LENGTH].strip()
+        if text:
+            seen.setdefault(text.casefold(), text)
+    return list(seen.values())[:MAX_TAGS]
 
 
 class DraftOut(BaseModel):
@@ -165,9 +192,12 @@ def row_query() -> Select[Any]:
             last.c.content,
             last.c.role,
             lead.c.status,
+            Customer.tags,
+            USER_LABEL,
         )
         .join(Customer, Customer.id == Conversation.customer_id)
         .outerjoin(Channel, Channel.id == Conversation.channel_id)
+        .outerjoin(User, User.id == Conversation.assignee_id)
         .outerjoin(last, true())
         .outerjoin(lead, true())
         .where(Conversation.sandbox.is_(False))
@@ -175,7 +205,8 @@ def row_query() -> Select[Any]:
 
 
 def row_values(row: Any) -> dict[str, Any]:
-    conversation, name, phone, channel, channel_name, content, role, lead_status = row
+    conversation, name, phone, channel, channel_name, content, role, lead_status = row[:8]
+    tags, assignee_name = row[8:]
     return {
         "id": conversation.id,
         "channel": channel,
@@ -190,10 +221,13 @@ def row_values(row: Any) -> dict[str, Any]:
         "preview_role": role,
         "waiting": conversation.mode == "human" and role == "customer",
         "lead_status": lead_status,
+        "assignee_id": conversation.assignee_id,
+        "assignee_name": assignee_name,
+        "tags": tags or [],
     }
 
 
-async def conversation_counts(db: AsyncSession) -> Counts:
+async def conversation_counts(db: AsyncSession, user_id: uuid.UUID) -> Counts:
     has_lead = (
         select(Lead.id)
         .where(Lead.conversation_id == Conversation.id)
@@ -208,6 +242,7 @@ async def conversation_counts(db: AsyncSession) -> Counts:
         .scalar_subquery()
         .correlate(Conversation)
     )
+    human = Conversation.mode == "human"
     row = (
         await db.execute(
             select(
@@ -216,10 +251,20 @@ async def conversation_counts(db: AsyncSession) -> Counts:
                 func.count(case((Conversation.mode == "human", 1))),
                 func.count(case((has_lead, 1))),
                 func.count(case(((Conversation.mode == "human") & (last_role == "customer"), 1))),
+                func.count(case((human & (Conversation.assignee_id == user_id), 1))),
+                func.count(case((human & Conversation.assignee_id.is_(None), 1))),
             ).where(Conversation.sandbox.is_(False))
         )
     ).one()
-    return Counts(all=row[0], bot=row[1], human=row[2], leads=row[3], waiting=row[4])
+    return Counts(
+        all=row[0],
+        bot=row[1],
+        human=row[2],
+        leads=row[3],
+        waiting=row[4],
+        mine=row[5],
+        unassigned=row[6],
+    )
 
 
 def matches(q: str) -> Any:
@@ -244,6 +289,7 @@ async def list_conversations(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     before: datetime | None = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
+    tag: Annotated[str | None, Query(max_length=TAG_LENGTH)] = None,
 ) -> ConversationList:
     query = row_query().where(Conversation.last_message_at.is_not(None))
     if q and q.strip():
@@ -252,6 +298,14 @@ async def list_conversations(
         query = query.where(Conversation.mode == filter_)
     elif filter_ == "leads":
         query = query.where(select(Lead.id).where(Lead.conversation_id == Conversation.id).exists())
+    elif filter_ == "mine":
+        query = query.where(
+            Conversation.mode == "human", Conversation.assignee_id == principal.user_id
+        )
+    elif filter_ == "unassigned":
+        query = query.where(Conversation.mode == "human", Conversation.assignee_id.is_(None))
+    if tag:
+        query = query.where(Customer.tags.contains([tag]))
     if before:
         query = query.where(Conversation.last_message_at < before)
     rows = (
@@ -260,9 +314,18 @@ async def list_conversations(
     items = [ConversationRow(**row_values(row)) for row in rows[:limit]]
     return ConversationList(
         items=items,
-        counts=await conversation_counts(db),
+        counts=await conversation_counts(db, principal.user_id),
         next_before=items[-1].last_message_at if len(rows) > limit else None,
     )
+
+
+@router.get("/tags")
+async def list_tags(principal: Member, db: TenantDb) -> list[TagCount]:
+    tag = func.unnest(Customer.tags).label("tag")
+    rows = await db.execute(
+        select(tag, func.count()).group_by(tag).order_by(func.count().desc(), tag).limit(100)
+    )
+    return [TagCount(tag=name, count=count) for name, count in rows]
 
 
 async def stream_changes(
@@ -390,13 +453,18 @@ async def detail(db: AsyncSession, conversation_id: uuid.UUID) -> ConversationDe
     )
     messages.reverse()
     products = await load_products(db, messages)
-    leads = await db.scalars(
-        select(Lead).where(Lead.conversation_id == conversation_id).order_by(Lead.created_at.desc())
+    leads = list(
+        await db.scalars(
+            select(Lead)
+            .where(Lead.conversation_id == conversation_id)
+            .order_by(Lead.created_at.desc())
+        )
     )
+    names = await member_names(db, [lead.assignee_id for lead in leads])
     return ConversationDetail(
         **row_values(row),
         messages=[message_out(m, products) for m in messages],
-        leads=[lead_out(lead) for lead in leads],
+        leads=[lead_out(lead, names.get(lead.assignee_id or uuid.UUID(int=0))) for lead in leads],
         customer=await customer_out(db, row[0].customer_id),
     )
 
@@ -421,6 +489,7 @@ async def customer_out(db: AsyncSession, customer_id: uuid.UUID) -> CustomerOut:
         channel=customer.channel,
         lang=customer.lang,
         note=customer.note,
+        tags=customer.tags,
         first_seen_at=customer.created_at,
         dialogs=int(dialogs or 0),
         leads=[
@@ -437,24 +506,32 @@ async def get_conversation(
     return await detail(db, conversation_id)
 
 
-async def set_mode(db: AsyncSession, conversation_id: uuid.UUID, mode: str) -> None:
+def own_user(principal: Principal) -> uuid.UUID | None:
+    # Админ Satushy под чужим магазином в ответственные не попадает: его нет в команде.
+    return None if principal.actor_id else principal.user_id
+
+
+async def set_mode(
+    db: AsyncSession, conversation_id: uuid.UUID, mode: str, assignee: uuid.UUID | None
+) -> None:
     row = await load_row(db, conversation_id)
     conversation: Conversation = row[0]
     conversation.mode = mode
     conversation.paused_reason = None
+    conversation.assignee_id = assignee
     await db.flush()
     await poke(conversation.tenant_id)
 
 
 @router.post("/{conversation_id}/takeover")
 async def takeover(conversation_id: uuid.UUID, principal: Member, db: TenantDb) -> ConversationRow:
-    await set_mode(db, conversation_id, "human")
+    await set_mode(db, conversation_id, "human", own_user(principal))
     return ConversationRow(**row_values(await load_row(db, conversation_id)))
 
 
 @router.post("/{conversation_id}/release")
 async def release(conversation_id: uuid.UUID, principal: Member, db: TenantDb) -> ConversationRow:
-    await set_mode(db, conversation_id, "bot")
+    await set_mode(db, conversation_id, "bot", None)
     return ConversationRow(**row_values(await load_row(db, conversation_id)))
 
 
@@ -497,13 +574,31 @@ async def reply(
     await db.execute(
         update(Conversation)
         .where(Conversation.id == conversation_id)
-        .values(mode="human", paused_reason=None, last_message_at=func.now())
+        .values(
+            mode="human",
+            paused_reason=None,
+            last_message_at=func.now(),
+            assignee_id=func.coalesce(Conversation.assignee_id, own_user(principal)),
+        )
     )
     await db.refresh(message)
     await poke(principal.tenant_id)
     if step["delivered"]:
         await agent.remember_manager_reply(conversation_id, text)
     return message_out(message, {})
+
+
+@router.patch("/{conversation_id}")
+async def assign(
+    conversation_id: uuid.UUID, body: AssignIn, principal: Member, db: TenantDb
+) -> ConversationRow:
+    row = await load_row(db, conversation_id)
+    if body.assignee_id:
+        await ensure_member(db, body.assignee_id)
+    row[0].assignee_id = body.assignee_id
+    await db.flush()
+    await poke(principal.tenant_id)
+    return ConversationRow(**row_values(await load_row(db, conversation_id)))
 
 
 @router.patch("/{conversation_id}/customer")
@@ -513,7 +608,10 @@ async def update_customer(
     row = await load_row(db, conversation_id)
     customer = await db.get(Customer, row[0].customer_id)
     assert customer is not None  # noqa: S101
-    customer.note = (body.note or "").strip() or None
+    if "note" in body.model_fields_set:
+        customer.note = (body.note or "").strip() or None
+    if body.tags is not None:
+        customer.tags = clean_tags(body.tags)
     await db.flush()
     return await customer_out(db, customer.id)
 

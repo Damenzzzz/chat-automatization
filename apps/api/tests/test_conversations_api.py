@@ -75,7 +75,15 @@ async def test_list_filters_and_counts(
 
     everything = (await client.get("/conversations")).json()
     assert {i["id"] for i in everything["items"]} == {str(by_bot), str(waiting), str(with_lead)}
-    assert everything["counts"] == {"all": 3, "bot": 2, "human": 1, "leads": 1, "waiting": 1}
+    assert everything["counts"] == {
+        "all": 3,
+        "bot": 2,
+        "human": 1,
+        "leads": 1,
+        "waiting": 1,
+        "mine": 0,
+        "unassigned": 1,
+    }
 
     human = (await client.get("/conversations", params={"filter": "human"})).json()
     assert [i["id"] for i in human["items"]] == [str(waiting)]
