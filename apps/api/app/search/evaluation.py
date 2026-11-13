@@ -92,11 +92,17 @@ def render_table(runs: Sequence[dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_report(date: str, runs: Sequence[dict[str, Any]], queries: int) -> str:
+def render_report(
+    date: str,
+    runs: Sequence[dict[str, Any]],
+    queries: int,
+    source: str = "`eval/queries.jsonl`",
+    about: str = "демо-каталогу «Цветы Пион»",
+) -> str:
     parts = [
         f"# Качество поиска — {date}",
         "",
-        f"Набор: `eval/queries.jsonl`, {queries} запросов к демо-каталогу «Цветы Пион».",
+        f"Набор: {source}, {queries} запросов к {about}.",
         "Режимы: `vector` — только pgvector; `hybrid` — vector + fts + sku через RRF;"
         " `hybrid+rerank` — полный конвейер `search_products`.",
         "",

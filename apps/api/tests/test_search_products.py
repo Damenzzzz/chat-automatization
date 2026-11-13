@@ -134,7 +134,7 @@ async def test_reranker_reorders_top_and_limits_pool(owner_engine: AsyncEngine) 
     async with tenant_session(tenant_id) as session:
         result = await search_products(session, "букет пионов", ml=ml)
     [pool] = ml.reranked
-    assert len(pool) == 30
+    assert len(pool) == get_settings().search_rerank_top == 20
     assert [h.name for h in result.items] == [d.split("\n")[0] for d in pool[::-1][:5]]
     assert [h.score for h in result.items] == sorted(
         (h.score or 0 for h in result.items), reverse=True

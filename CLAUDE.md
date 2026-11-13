@@ -86,12 +86,12 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 ## Поиск
 
 - `app.search`: `search_products(session, query, filters)` → топ-5 товаров с ценой и остатком из БД; `search_kb(session, query)` → топ-3 куска базы знаний. Вызывать внутри `tenant_session` / `TenantDb`.
-- Конвейер: три списка по 50 — vector (pgvector cosine, `hnsw.iterative_scan = relaxed_order`), fts (`websearch_to_tsquery` russian + simple, слова через ИЛИ), sku (точно и триграммы по `sku_norm`, только если в запросе есть похожий на артикул токен) → RRF (k = 60) → фильтры → реранкер по топ-30 → топ-5. Точное совпадение артикула всегда первое.
+- Конвейер: три списка по 50 — vector (pgvector cosine, `hnsw.iterative_scan = relaxed_order`), fts (`websearch_to_tsquery` russian + simple, слова через ИЛИ), sku (точно и триграммы по `sku_norm`, только если в запросе есть похожий на артикул токен) → RRF (k = 60) → фильтры → реранкер по топ-20 (`SEARCH_RERANK_TOP`) → топ-5. Точное совпадение артикула всегда первое и из отбора не выпадает.
 - Фильтры `ProductFilters(price_min, price_max, in_stock, category)` стоят и в SQL кандидатов, и повторно после слияния. `in_stock` пропускает неизвестный остаток (`NULL`), но не `0`.
 - ML недоступен → поиск работает без вектора и реранкера (fts + sku, порядок RRF).
 - Каждый поиск пишется в `search_log` (`kind`, `lang`, `result_count`, `has_in_stock`, `latency_ms`); отладка — `record=False`. Язык — эвристика `app/search/lang.py`, роутер LLM может передать свой.
 - `GET /debug/search?q=&tenant_id=` (только admin) — кандидаты, ранги в каждом списке, RRF, оценки реранкера.
-- Качество: `make eval` (Qwen3 и BGE-M3 по очереди, переиндексация демо-магазина) → `apps/api/eval/results/<дата>.md`. Набор — `apps/api/eval/queries.jsonl`, 60 запросов (ru 30, kk 15, смесь 15).
+- Качество: `make eval` (Qwen3 и BGE-M3 по очереди, переиндексация демо-магазина) → `apps/api/eval/results/<дата>.md`. Набор — `apps/api/eval/queries.jsonl`, 60 запросов (ru 30, kk 15, смесь 15). Второй набор — смешанный каталог из четырёх категорий: `python -m scripts.eval_search --catalog mixed` (`eval/catalogs/mixed_products.csv`, `eval/queries_mixed.jsonl`, 48 запросов, отдельный магазин без пользователей). Почему глубина реранкера 20 — `eval/results/2026-11-14-rerank-depth.md`.
 
 ## Бот (LangGraph)
 

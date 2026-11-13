@@ -1,0 +1,48 @@
+{"id": 1, "lang": "ru", "query": "масляный фильтр на камри", "expected": ["AP-001"]}
+{"id": 2, "lang": "ru", "query": "колодки на солярис задние", "expected": ["AP-006"]}
+{"id": 3, "lang": "ru", "query": "аккумулятор 60 ампер", "expected": ["AP-009"]}
+{"id": 4, "lang": "ru", "query": "масло 5w30", "expected": ["AP-011"]}
+{"id": 5, "lang": "ru", "query": "дворники", "expected": ["AP-013"]}
+{"id": 6, "lang": "ru", "query": "ремень грм на поло", "expected": ["AP-015"]}
+{"id": 7, "lang": "ru", "query": "свечи зажигания", "expected": ["AP-008"]}
+{"id": 8, "lang": "ru", "query": "игровой ноутбук", "expected": ["EL-007"]}
+{"id": 9, "lang": "ru", "query": "айфон 15", "expected": ["EL-004", "EL-005"]}
+{"id": 10, "lang": "ru", "query": "галакси а55", "expected": ["EL-001"]}
+{"id": 11, "lang": "ru", "query": "беспроводные наушники", "expected": ["EL-009", "EL-010"]}
+{"id": 12, "lang": "ru", "query": "пауэрбанк", "expected": ["EL-014"]}
+{"id": 13, "lang": "ru", "query": "макбук", "expected": ["EL-008"]}
+{"id": 14, "lang": "ru", "query": "телевизор 55 дюймов", "expected": ["EL-013"]}
+{"id": 15, "lang": "ru", "query": "зимняя куртка женская", "expected": ["CL-001"]}
+{"id": 16, "lang": "ru", "query": "мужские джинсы", "expected": ["CL-004"]}
+{"id": 17, "lang": "ru", "query": "белые кроссовки женские", "expected": ["CL-010"]}
+{"id": 18, "lang": "ru", "query": "вечернее платье", "expected": ["CL-007"]}
+{"id": 19, "lang": "ru", "query": "зимние ботинки мужские", "expected": ["CL-011"]}
+{"id": 20, "lang": "ru", "query": "крем от солнца", "expected": ["CS-004"]}
+{"id": 21, "lang": "ru", "query": "шампунь от перхоти", "expected": ["CS-007"]}
+{"id": 22, "lang": "ru", "query": "красная помада", "expected": ["CS-011"]}
+{"id": 23, "lang": "ru", "query": "духи женские", "expected": ["CS-014"]}
+{"id": 24, "lang": "ru", "query": "сыворотка с витамином с", "expected": ["CS-003"]}
+{"id": 25, "lang": "kk", "query": "май сүзгісі бар ма?", "expected": ["AP-001", "AP-002"]}
+{"id": 26, "lang": "kk", "query": "камриге тежегіш қалыптары керек", "expected": ["AP-005"]}
+{"id": 27, "lang": "kk", "query": "мотор майы қанша тұрады", "expected": ["AP-011", "AP-012"]}
+{"id": 28, "lang": "kk", "query": "сымсыз құлаққап", "expected": ["EL-009", "EL-010"]}
+{"id": 29, "lang": "kk", "query": "смарт сағат керек", "expected": ["EL-011", "EL-012"]}
+{"id": 30, "lang": "kk", "query": "ойын ноутбугі", "expected": ["EL-007"]}
+{"id": 31, "lang": "kk", "query": "әйелдер күртешесі", "expected": ["CL-001"]}
+{"id": 32, "lang": "kk", "query": "ерлерге қысқы етік", "expected": ["CL-011"]}
+{"id": 33, "lang": "kk", "query": "кешкі көйлек бар ма", "expected": ["CL-007"]}
+{"id": 34, "lang": "kk", "query": "күннен қорғайтын крем", "expected": ["CS-004"]}
+{"id": 35, "lang": "kk", "query": "ерлер иіс суы", "expected": ["CS-015"]}
+{"id": 36, "lang": "kk", "query": "қайызғаққа қарсы шампунь", "expected": ["CS-007"]}
+{"id": 37, "lang": "mixed", "query": "сәлем, камриге тормозные колодки бар ма?", "expected": ["AP-005"]}
+{"id": 38, "lang": "mixed", "query": "аккумулятор 75 ач қанша тұрады", "expected": ["AP-010"]}
+{"id": 39, "lang": "mixed", "query": "iphone 15 pro бар ма?", "expected": ["EL-005"]}
+{"id": 40, "lang": "mixed", "query": "ноутбук для учёбы арзан керек", "expected": ["EL-006"]}
+{"id": 41, "lang": "mixed", "query": "худи оверсайз қанша", "expected": ["CL-006"]}
+{"id": 42, "lang": "mixed", "query": "ерлерге кроссовки для бега", "expected": ["CL-009"]}
+{"id": 43, "lang": "mixed", "query": "майлы теріге крем керек", "expected": ["CS-002"]}
+{"id": 44, "lang": "mixed", "query": "тушь для ресниц бар ма сізде", "expected": ["CS-010"]}
+{"id": 45, "lang": "mixed", "query": "тойға костюм мужской керек", "expected": ["CL-014"]}
+{"id": 46, "lang": "mixed", "query": "зарядка usb-c 65w бар ма", "expected": ["EL-015"]}
+{"id": 47, "lang": "mixed", "query": "AP-007 бар ма", "expected": ["AP-007"]}
+{"id": 48, "lang": "mixed", "query": "EL-012 сколько стоит, айтыңызшы", "expected": ["EL-012"]}
