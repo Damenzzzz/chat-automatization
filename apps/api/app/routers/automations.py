@@ -2,8 +2,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field, ValidationError
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, StringConstraints, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,13 +14,22 @@ from app.automations.digest import DigestSettings
 from app.automations.followup import FollowupSettings, deliver, reject_pending
 from app.automations.lead_reminders import LeadReminderSettings
 from app.automations.registry import SERVICES
-from app.automations.runner import BusyError, ensure_row, execute, is_enabled, load, read_settings
+from app.automations.runner import (
+    BusyError,
+    DisabledError,
+    ensure_row,
+    execute,
+    is_enabled,
+    load,
+    read_settings,
+)
 from app.automations.stock import StockSettings
 from app.channels.outbound import Outbound
 from app.channels.registry import get_adapters
+from app.core.net import client_ip
 from app.core.ratelimit import limit
 from app.core.redis import get_redis
-from app.models import AutomationRun, Conversation, Customer, Followup
+from app.models import AutomationRun, Conversation, Customer, Followup, Tenant
 
 router = APIRouter(tags=["automations"])
 
@@ -30,6 +39,10 @@ Kind = Literal["digest", "stock", "followup", "lead_reminders"]
 FollowupStatus = Literal["pending", "sent", "rejected", "expired", "failed"]
 RUNS_PER_HOUR = 6
 PREVIEWS_PER_HOUR = 120
+SENDS_PER_HOUR = 120
+FollowupText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=10, max_length=500)
+]
 SettingsOut = DigestSettings | StockSettings | FollowupSettings | LeadReminderSettings
 
 
@@ -75,7 +88,7 @@ class FollowupOut(BaseModel):
 
 
 class FollowupSendIn(BaseModel):
-    text: str | None = Field(default=None, min_length=10, max_length=500)
+    text: FollowupText | None = None
 
 
 def get_deps(agent: Annotated[Agent, Depends(get_agent)]) -> Deps:
@@ -160,12 +173,15 @@ async def save_automation(
 @router.post("/automations/{kind}/preview")
 async def preview_automation(
     kind: Kind,
+    request: Request,
     principal: Member,
     db: TenantDb,
     deps: Annotated[Deps, Depends(get_light_deps)],
     body: PreviewIn | None = None,
 ) -> Preview:
-    await limit(deps.redis, f"rl:automation-preview:{principal.tenant_id}", PREVIEWS_PER_HOUR, 3600)
+    # В демо-магазине все посетители — один пользователь, поэтому считаем ещё и по адресу.
+    key = f"rl:automation-preview:{principal.tenant_id}:{client_ip(request)}"
+    await limit(deps.redis, key, PREVIEWS_PER_HOUR, 3600)
     service = SERVICES[kind]
     row = await load(db, kind)
     settings = (
@@ -186,6 +202,8 @@ async def run_automation(
         run = await execute(principal.tenant_id, kind, "manual", deps)
     except BusyError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, "automation_busy") from exc
+    except DisabledError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "automation_disabled") from exc
     assert run is not None  # noqa: S101
     return run_out(run)
 
@@ -258,7 +276,10 @@ async def send_followup(
     deps: Annotated[Deps, Depends(get_deps)],
     body: FollowupSendIn | None = None,
 ) -> FollowupOut:
+    await limit(deps.redis, f"rl:followup-send:{principal.tenant_id}", SENDS_PER_HOUR, 3600)
     followup = await pending_followup(db, followup_id)
+    if await db.scalar(select(Tenant.bot_paused)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "bot_paused")
     user_id = None if principal.actor_id else principal.user_id
     await deliver(db, followup, deps, datetime.now(UTC), body.text if body else None, user_id)
     await db.flush()

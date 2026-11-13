@@ -14,7 +14,7 @@ from sqlalchemy.sql import Select
 
 from app.auth.deps import Principal, TenantDb, require_role
 from app.core.poke import poke
-from app.models import Conversation, Customer, Lead, User
+from app.models import AuditLog, Conversation, Customer, Lead, User
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 log = structlog.get_logger()
@@ -314,7 +314,22 @@ async def export_leads(
             lead.note,
         ]
         writer.writerow([csv_cell(cell) for cell in cells])
-    log.info("leads.exported", tenant_id=str(principal.tenant_id), rows=len(rows))
+    if principal.actor_id:
+        # Обычные GET в журнал не попадают, но выгрузка контактов админом — должна.
+        db.add(
+            AuditLog(
+                tenant_id=principal.tenant_id,
+                actor_id=principal.actor_id,
+                action="GET /leads/export",
+                details={"impersonation": True, "rows": len(rows)},
+            )
+        )
+    log.info(
+        "leads.exported",
+        tenant_id=str(principal.tenant_id),
+        user_id=str(principal.actor_id or principal.user_id),
+        rows=len(rows),
+    )
     return Response(
         content=buffer.getvalue().encode("utf-8-sig"),
         media_type="text/csv; charset=utf-8",

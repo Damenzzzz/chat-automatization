@@ -122,6 +122,7 @@ class Digest(Service[DigestSettings]):
         "Раз в день присылает владельцу итоги вчерашнего дня и то, что ждёт ответа прямо сейчас."
     )
     settings_model = DigestSettings
+    cooldown = 6 * 3600
 
     def due(
         self,

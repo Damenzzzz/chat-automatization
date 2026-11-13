@@ -89,6 +89,9 @@ class Service[S: BaseModel]:
     title: ClassVar[str]
     description: ClassVar[str]
     default_enabled: ClassVar[bool] = False
+    # После запуска по расписанию, который что-то отправил, сервис молчит столько секунд,
+    # даже если его состояние в базе не сохранилось.
+    cooldown: ClassVar[int] = 0
     settings_model: type[S]
 
     def due(

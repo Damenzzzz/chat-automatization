@@ -14,11 +14,28 @@ from app.models import Automation, AutomationRun
 
 log = structlog.get_logger()
 
-LOCK_SECONDS = 120
+LOCK_SECONDS = 900
+RELEASE = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
+)
 
 
 class BusyError(Exception):
     pass
+
+
+class DisabledError(Exception):
+    pass
+
+
+async def cooling(redis: Any, key: str, seconds: int, moment: datetime) -> bool:
+    stamp = await redis.get(key)
+    if not seconds or stamp is None:
+        return False
+    try:
+        return (moment - datetime.fromisoformat(str(stamp))).total_seconds() < seconds
+    except ValueError:
+        return False
 
 
 def read_settings(service: Service[Any], row: Automation | None) -> BaseModel:
@@ -77,24 +94,31 @@ async def execute(
     """Один запуск сервиса. По расписанию пустой запуск в историю не пишется."""
     service = SERVICES[kind]
     moment = now or datetime.now(UTC)
-    lock = f"automation:{tenant_id}:{kind}"
-    if not await deps.redis.set(lock, "1", nx=True, ex=LOCK_SECONDS):
+    lock, token = f"automation:{tenant_id}:{kind}", uuid.uuid4().hex
+    cool = f"automation-ran:{tenant_id}:{kind}"
+    if not await deps.redis.set(lock, token, nx=True, ex=LOCK_SECONDS):
         if trigger == "manual":
             raise BusyError
         return None
     try:
+        if trigger == "schedule" and await cooling(deps.redis, cool, service.cooldown, moment):
+            return None
         async with tenant_session(tenant_id) as session:
             row = await load(session, kind)
             settings = read_settings(service, row)
+            if not is_enabled(service, row):
+                if trigger == "manual":
+                    raise DisabledError
+                return None
             if trigger == "schedule":
-                if not is_enabled(service, row):
-                    return None
                 state = dict(row.state) if row else {}
                 if not service.due(settings, state, row.last_run_at if row else None, moment):
                     return None
             row = row or await ensure_row(session, tenant_id, service)
             ctx = Context(session, tenant_id, moment, dict(row.state), deps, trigger)
             outcome: Outcome = await service.run(ctx, settings)
+            if trigger == "schedule" and service.cooldown and outcome.status == "ok":
+                await deps.redis.set(cool, moment.isoformat(), ex=service.cooldown)
             row.state = ctx.state
             row.last_run_at = moment
             if outcome.status == "empty" and trigger == "schedule":
@@ -112,11 +136,14 @@ async def execute(
             await session.refresh(run)
             session.expunge(run)
             return run
+    except DisabledError:
+        raise
     except Exception:
         log.exception("automation.failed", tenant_id=str(tenant_id), kind=kind, trigger=trigger)
         return await _record_failure(tenant_id, kind, trigger)
     finally:
-        await deps.redis.delete(lock)
+        # Снимаем только свою блокировку: чужая могла появиться, если наша истекла.
+        await deps.redis.eval(RELEASE, 1, lock, token)
 
 
 async def due_automations() -> list[tuple[uuid.UUID, str]]:
@@ -135,7 +162,8 @@ async def run_due(deps: Deps) -> int:
 
 async def purge_runs(keep_days: int) -> int:
     async with get_sessionmaker()() as session, session.begin():
+        # Записи очереди нужны неделю: по ним видно, кому уже писали.
         removed = await session.scalar(
-            text("SELECT purge_automation_runs(:days)"), {"days": keep_days}
+            text("SELECT purge_automation_runs(:days)"), {"days": max(keep_days, 8)}
         )
     return int(removed or 0)

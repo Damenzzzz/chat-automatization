@@ -224,6 +224,10 @@ async def test_digest_preview_run_and_history(
     assert told == []
     assert await _count(owner_engine, "SELECT count(*) FROM notifications") == 0
 
+    off = await client.post("/automations/digest/run")
+    assert (off.status_code, off.json()["detail"]) == (409, "automation_disabled")
+    assert told == []
+    await client.put("/automations/digest", json={"enabled": True})
     run = await client.post("/automations/digest/run")
     assert run.status_code == 200
     assert (run.json()["status"], run.json()["trigger"]) == ("ok", "manual")
@@ -241,6 +245,7 @@ async def test_digest_preview_run_and_history(
 async def test_manual_runs_are_rate_limited(
     client: AsyncClient, owner: uuid.UUID, deps: Deps, told: list[Any]
 ) -> None:
+    await client.put("/automations/stock", json={"enabled": True})
     codes = [(await client.post("/automations/stock/run")).status_code for _ in range(7)]
     assert codes == [200] * 6 + [429]
 
@@ -578,6 +583,7 @@ async def test_failed_run_is_recorded_without_details(
         raise RuntimeError("секрет в тексте ошибки")
 
     monkeypatch.setattr(base, "send_owner_message", broken)
+    await client.put("/automations/digest", json={"enabled": True})
     run = (await client.post("/automations/digest/run")).json()
     assert run["status"] == "failed"
     assert "секрет" not in str(run)
@@ -609,3 +615,77 @@ def test_plural_forms() -> None:
         "товар",
         "товаров",
     ]
+
+
+async def test_scheduled_digest_is_not_repeated_when_its_state_was_lost(
+    owner_engine: AsyncEngine, deps: Deps, told: list[Any]
+) -> None:
+    tenant_id, _, _ = await create_user(owner_engine)
+    await _enable(owner_engine, tenant_id, "digest", hour=0)
+    assert await _tick(deps, tenant_id) == 1
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE automations SET state = '{}', last_run_at = NULL WHERE tenant_id = :t"),
+            {"t": tenant_id},
+        )
+    assert await _tick(deps, tenant_id) == 0
+    assert len(told) == 1
+
+
+async def test_run_does_not_start_or_unlock_while_another_holds_the_lock(
+    client: AsyncClient, owner: uuid.UUID, deps: Deps, redis: Redis, told: list[Any]
+) -> None:
+    await client.put("/automations/digest", json={"enabled": True})
+    lock = f"automation:{owner}:digest"
+    await redis.set(lock, "чужой запуск")
+    busy = await client.post("/automations/digest/run")
+    assert (busy.status_code, busy.json()["detail"]) == (409, "automation_busy")
+    assert await execute(owner, "digest", "schedule", deps) is None
+    assert await redis.get(lock) == "чужой запуск"
+    assert told == []
+
+    await redis.delete(lock)
+    assert (await client.post("/automations/digest/run")).status_code == 200
+    assert await redis.get(lock) is None
+
+
+async def test_followup_is_never_sent_twice_or_during_pause(
+    client: AsyncClient,
+    owner: uuid.UUID,
+    owner_engine: AsyncEngine,
+    deps: Deps,
+    outbound: FakeOutbound,
+    told: list[Any],
+) -> None:
+    conversation_id = await _silent_dialog(owner_engine, owner)
+    await client.put("/automations/followup", json={"enabled": True, "settings": NO_QUIET})
+    await _tick(deps, owner)
+    [pending] = (await client.get("/followups", params={"status": "pending"})).json()
+
+    blank = await client.post(f"/followups/{pending['id']}/send", json={"text": " " * 12})
+    assert blank.status_code == 422
+    await client.patch("/shop", json={"bot_paused": True})
+    paused = await client.post(f"/followups/{pending['id']}/send")
+    assert (paused.status_code, paused.json()["detail"]) == (409, "bot_paused")
+    assert outbound.sent == []
+    await client.patch("/shop", json={"bot_paused": False})
+
+    async def broken_memory(conversation: uuid.UUID, body: str) -> None:
+        raise RuntimeError("память бота недоступна")
+
+    deps.remember = broken_memory
+    sent = await client.post(f"/followups/{pending['id']}/send")
+    assert sent.json()["status"] == "sent"
+    assert len(outbound.sent) == 1
+
+    async with owner_engine.begin() as conn:
+        again = await conn.scalar(
+            text(
+                "INSERT INTO followups (tenant_id, conversation_id, text)"
+                " VALUES (:t, :c, 'Повторное напоминание') RETURNING id"
+            ),
+            {"t": owner, "c": conversation_id},
+        )
+    repeat = await client.post(f"/followups/{again}/send")
+    assert repeat.json()["status"] == "expired"
+    assert len(outbound.sent) == 1

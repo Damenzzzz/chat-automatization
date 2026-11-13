@@ -28,6 +28,7 @@ log = structlog.get_logger()
 # WhatsApp и Instagram разрешают писать первым только 24 часа после сообщения покупателя.
 WINDOW = timedelta(hours=23)
 REPEAT_AFTER = timedelta(days=7)
+SENT_KEY = "followup-sent:{}"
 BATCH = 20
 DEFAULT_TEXT = (
     "Здравствуйте! Вы недавно спрашивали у нас про товар."
@@ -180,11 +181,18 @@ async def deliver(
     step: dict[str, Any] = {"node": "followup", "delivered": True}
     if user_id:
         step["user_id"] = str(user_id)
+    # Отметка в Redis переживает откат транзакции: второй раз тому же покупателю не уйдёт.
+    sent_key = SENT_KEY.format(conversation.id)
+    seconds = int(REPEAT_AFTER.total_seconds())
+    if not body or not await deps.redis.set(sent_key, "1", nx=True, ex=seconds):
+        followup.status = "expired"
+        return followup.status
     try:
         await deps.outbound.send(
             conversation.channel_id, str(external_id), OutgoingMessage(text=body)
         )
     except ChannelError as exc:
+        await deps.redis.delete(sent_key)
         log.warning("followup.send_failed", conversation_id=str(conversation.id), error=str(exc))
         followup.status = "failed"
         return followup.status
@@ -200,9 +208,13 @@ async def deliver(
     conversation.last_message_at = now
     followup.text, followup.status, followup.sent_at = body, "sent", now
     await session.flush()
-    await poke(followup.tenant_id)
-    if deps.remember is not None:
-        await deps.remember(conversation.id, body)
+    # Сообщение уже ушло: сбой уведомления кабинета или памяти бота не должен его откатить.
+    try:
+        await poke(followup.tenant_id)
+        if deps.remember is not None:
+            await deps.remember(conversation.id, body)
+    except Exception:
+        log.exception("followup.after_send_failed", conversation_id=str(conversation.id))
     return followup.status
 
 

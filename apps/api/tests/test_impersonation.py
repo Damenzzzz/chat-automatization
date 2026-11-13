@@ -74,3 +74,16 @@ async def test_create_admin_is_idempotent(database: None) -> None:
     assert await create_admin(IdentityIn(email=email)) == await create_admin(
         IdentityIn(email=email)
     )
+
+
+async def test_lead_export_by_admin_is_audited(
+    client: AsyncClient, sender: FakeSender, owner_engine: AsyncEngine
+) -> None:
+    phone = random_phone()
+    admin_id = await create_admin(IdentityIn(phone=phone))
+    shop_id, *_ = await create_user(owner_engine)
+    await login(client, sender, phone)
+    await client.post(f"/admin/impersonate/{shop_id}")
+
+    assert (await client.get("/leads/export")).status_code == 200
+    assert ("GET /leads/export", admin_id) in await _audit(owner_engine, shop_id)

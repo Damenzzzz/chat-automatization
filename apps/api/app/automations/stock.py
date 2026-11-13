@@ -65,6 +65,7 @@ class Stock(Service[StockSettings]):
         " пока бот ещё не начал отказывать покупателям."
     )
     settings_model = StockSettings
+    cooldown = 50 * 60
 
     def due(
         self,
