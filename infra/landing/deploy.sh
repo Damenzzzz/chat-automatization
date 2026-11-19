@@ -2,6 +2,7 @@
 # Разворачивает лендинг в AWS: стек (S3, CloudFront, функция заявок), код функции, файлы сайта.
 # Первый запуск: LEADS_EMAIL=you@example.com infra/landing/deploy.sh
 # Повторные запуски адрес не требуют. Сменить адрес — снова передать LEADS_EMAIL.
+# Свой домен (один раз): DOMAIN=satushy.app CERT_ARN=<ACM us-east-1> ZONE_ID=<Route 53>.
 set -euo pipefail
 
 STACK="${STACK:-satushy-landing}"
@@ -19,13 +20,17 @@ echo "==> Сборка сайта"
 DIST="$ROOT/apps/web/out"
 
 echo "==> Стек $STACK ($REGION)"
-params=()
+overrides=()
 if ! aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" >/dev/null 2>&1; then
   : "${LEADS_EMAIL:?Первый запуск: укажите LEADS_EMAIL — адрес для заявок}"
-  params=(--parameter-overrides "LeadsEmail=$LEADS_EMAIL" "OriginSecret=$(openssl rand -hex 24)")
-elif [ -n "${LEADS_EMAIL:-}" ]; then
-  params=(--parameter-overrides "LeadsEmail=$LEADS_EMAIL")
+  overrides+=("OriginSecret=$(openssl rand -hex 24)")
 fi
+[ -n "${LEADS_EMAIL:-}" ] && overrides+=("LeadsEmail=$LEADS_EMAIL")
+[ -n "${DOMAIN:-}" ] && overrides+=("DomainName=$DOMAIN")
+[ -n "${CERT_ARN:-}" ] && overrides+=("CertificateArn=$CERT_ARN")
+[ -n "${ZONE_ID:-}" ] && overrides+=("HostedZoneId=$ZONE_ID")
+params=()
+[ ${#overrides[@]} -gt 0 ] && params=(--parameter-overrides "${overrides[@]}")
 aws cloudformation deploy --region "$REGION" --stack-name "$STACK" \
   --template-file "$ROOT/infra/landing/stack.yaml" \
   --capabilities CAPABILITY_IAM --no-fail-on-empty-changeset \

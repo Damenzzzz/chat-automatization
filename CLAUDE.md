@@ -190,6 +190,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - Сборка отдельного сайта: `LANDING_ONLY=1` → `output: "export"` в `apps/web/out`; маршруты — только файлы `*.landing.tsx`, кабинет и `proxy.ts` в неё не попадают. Код, которому нужен API (демо-вход), в `landing-page.tsx` не импортировать — передавать с `app/page.tsx` пропом.
 - В `standalone` чат отвечает записанными репликами (`LiveChat offline`), вместо входа — форма `contact-form.tsx`: `POST /api/lead` → CloudFront → API Gateway → `apps/landing/lambda/handler.py` → файл в S3 и письмо через SNS. Текст заявки и контакты в логи не писать.
 - Проверка: `make landing-test` (собирает сайт, проверяет его и функцию заявок). Выкладка: `make landing-deploy`. Адрес для заявок — только через `LEADS_EMAIL`, в репозиторий не класть.
+- Домен `satushy.app`: DNS в Route 53 (серверы имён прописаны в name.com), сертификат ACM в `us-east-1`, `www` → основной домен. Параметры домена стек помнит, повторно передавать не нужно; задаются один раз: `make landing-deploy DOMAIN=… CERT_ARN=… ZONE_ID=…`.
 
 ## Демо-режим
 
