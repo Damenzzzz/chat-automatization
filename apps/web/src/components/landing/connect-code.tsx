@@ -16,7 +16,7 @@ const TABS = [
         ["t", "<script "],
         ["a", "src"],
         ["t", "="],
-        ["s", '"https://satushy.kz/widget.js"'],
+        ["s", '"https://satushy.app/widget.js"'],
       ],
       [
         ["t", "        "],
