@@ -87,3 +87,10 @@ test("ссылки шапки прокручивают к разделу пла�
   assert.match(html, /<div[^>]*data-landing/);
   assert.match(html, /<html[^>]*data-scroll-behavior="smooth"/);
 });
+
+test("robots.txt и sitemap.xml указывают на satushy.app", () => {
+  const robots = readFileSync(join(out, "robots.txt"), "utf8");
+  assert.match(robots, /^Sitemap: https:\/\/satushy\.app\/sitemap\.xml$/m);
+  const sitemap = readFileSync(join(out, "sitemap.xml"), "utf8");
+  assert.ok(sitemap.includes("<loc>https://satushy.app/</loc>"), "в sitemap нет главной");
+});
