@@ -27,6 +27,14 @@ class AnswerOut(BaseModel):
     resolved: int
 
 
+class DismissIn(BaseModel):
+    also_resolve: list[uuid.UUID] = Field(default_factory=list, max_length=300)
+
+
+class DismissOut(BaseModel):
+    resolved: int
+
+
 @router.post("/{unanswered_id}/answer", status_code=status.HTTP_201_CREATED)
 async def answer_question(
     unanswered_id: uuid.UUID,
@@ -70,3 +78,23 @@ async def answer_question(
         job_id=f"reindex:{principal.tenant_id}",
     )
     return AnswerOut(kb_chunk_id=chunk.id, resolved=resolved)
+
+
+@router.post("/{unanswered_id}/dismiss")
+async def dismiss_question(
+    unanswered_id: uuid.UUID, body: DismissIn, principal: Member, db: TenantDb
+) -> DismissOut:
+    question = await db.get(Unanswered, unanswered_id, with_for_update=True)
+    if question is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "question_not_found")
+    if question.resolved_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "already_resolved")
+    rows = await db.scalars(
+        update(Unanswered)
+        .where(
+            Unanswered.id.in_({unanswered_id, *body.also_resolve}), Unanswered.resolved_at.is_(None)
+        )
+        .values(resolved_at=datetime.now(UTC))
+        .returning(Unanswered.id)
+    )
+    return DismissOut(resolved=len(list(rows)))
