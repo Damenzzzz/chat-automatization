@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from fastapi import FastAPI, HTTPException
 from httpx import AsyncClient
@@ -126,7 +128,12 @@ async def test_request_code_hides_code_in_prod(
 async def test_demo_owner_cannot_change_shop(client: AsyncClient, queue: RecordingQueue) -> None:
     await client.post("/demo/login")
 
-    for method, path in [("PUT", "/bot-profile"), ("PATCH", "/shop"), ("POST", "/team/invite")]:
+    for method, path in [
+        ("PUT", "/bot-profile"),
+        ("PATCH", "/shop"),
+        ("POST", "/team/invite"),
+        ("PATCH", f"/products/{uuid.uuid4()}"),
+    ]:
         response = await client.request(method, path, json={})
         assert response.status_code == 403
         assert response.json()["detail"] == "demo_read_only"
