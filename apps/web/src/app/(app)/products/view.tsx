@@ -1,11 +1,13 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Pencil, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 
 import { CatalogImport } from "@/components/catalog/catalog-import";
+import { ProductEditor } from "@/components/catalog/product-editor";
+import { useSession } from "@/components/shell/session";
 import { Button } from "@/components/ui/button";
 import { Empty, LoadError, Loading, Page, PageHeader } from "@/components/ui/page";
 import { api, type Schemas } from "@/lib/api/client";
@@ -19,27 +21,66 @@ function stockText(stock: number | null | undefined): string {
   return stock > 0 ? count(stock) : "Нет в наличии";
 }
 
-function Row({ product }: { product: Schemas["CatalogProduct"] }) {
+function Row({
+  product,
+  editable,
+  onChanged,
+}: {
+  product: Schemas["CatalogProduct"];
+  editable: boolean;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
   return (
-    <tr className="border-b border-line align-top max-md:block max-md:py-3">
-      <th scope="row" className="py-3 pr-4 text-left font-medium max-md:block max-md:py-0">
-        <span className="break-words">{product.name}</span>
-        {!product.indexed && (
-          <span className="mt-0.5 block text-xs font-normal text-steel">
-            Бот скоро начнёт его находить
-          </span>
+    <>
+      <tr className="border-b border-line align-top max-md:block max-md:py-3">
+        <th scope="row" className="py-3 pr-4 text-left font-medium max-md:block max-md:py-0">
+          <span className="break-words">{product.name}</span>
+          {!product.indexed && (
+            <span className="mt-0.5 block text-xs font-normal text-steel">
+              Бот скоро начнёт его находить
+            </span>
+          )}
+        </th>
+        <td className="py-3 pr-4 text-steel max-md:inline max-md:pr-3">{product.sku}</td>
+        <td className="py-3 pr-4 text-steel max-md:inline">{product.category}</td>
+        <td className="py-3 pr-4 text-right whitespace-nowrap tnum max-md:block max-md:py-0 max-md:text-left">
+          {money(product.price)}
+        </td>
+        <td className="py-3 text-right whitespace-nowrap tnum max-md:block max-md:py-0 max-md:text-left max-md:text-steel">
+          <span className="md:hidden">Остаток: </span>
+          {stockText(product.stock)}
+        </td>
+        {editable && (
+          <td className="py-1.5 pl-2 text-right max-md:block max-md:py-0 max-md:pt-2 max-md:pl-0 max-md:text-left">
+            <Button
+              variant="ghost"
+              aria-label={`Изменить цену и остаток: ${product.name}`}
+              aria-expanded={editing}
+              onClick={() => setEditing(!editing)}
+              className="px-3"
+            >
+              <Pencil aria-hidden />
+              <span className="md:sr-only">Изменить</span>
+            </Button>
+          </td>
         )}
-      </th>
-      <td className="py-3 pr-4 text-steel max-md:inline max-md:pr-3">{product.sku}</td>
-      <td className="py-3 pr-4 text-steel max-md:inline">{product.category}</td>
-      <td className="py-3 pr-4 text-right whitespace-nowrap tnum max-md:block max-md:py-0 max-md:text-left">
-        {money(product.price)}
-      </td>
-      <td className="py-3 text-right whitespace-nowrap tnum max-md:block max-md:py-0 max-md:text-left max-md:text-steel">
-        <span className="md:hidden">Остаток: </span>
-        {stockText(product.stock)}
-      </td>
-    </tr>
+      </tr>
+      {editing && (
+        <tr className="border-b border-line max-md:block">
+          <td colSpan={6} className="py-3 max-md:block">
+            <ProductEditor
+              product={product}
+              onCancel={() => setEditing(false)}
+              onDone={() => {
+                setEditing(false);
+                onChanged();
+              }}
+            />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -55,6 +96,8 @@ export function ProductsView() {
 }
 
 function Products({ query, upload }: { query: string; upload: boolean }) {
+  const { me, isOwner } = useSession();
+  const editable = isOwner && !me?.demo;
   const [input, setInput] = useState(query);
   const [q, setQ] = useState(query);
   const [offset, setOffset] = useState(0);
@@ -146,11 +189,21 @@ function Products({ query, upload }: { query: string; upload: boolean }) {
                   <th scope="col" className="py-2 text-right font-normal">
                     Остаток
                   </th>
+                  {editable && (
+                    <th scope="col" className="py-2 font-normal">
+                      <span className="sr-only">Действия</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="max-md:block">
                 {data.items.map((product) => (
-                  <Row key={product.id} product={product} />
+                  <Row
+                    key={product.id}
+                    product={product}
+                    editable={editable}
+                    onChanged={() => void mutate()}
+                  />
                 ))}
               </tbody>
             </table>
