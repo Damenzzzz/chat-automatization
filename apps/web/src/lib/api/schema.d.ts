@@ -584,6 +584,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/unanswered/{unanswered_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Question */
+        post: operations["dismiss_question_unanswered__unanswered_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/balance": {
         parameters: {
             query?: never;
@@ -1792,6 +1809,16 @@ export interface components {
              * @enum {string}
              */
             recipients: "owner" | "team";
+        };
+        /** DismissIn */
+        DismissIn: {
+            /** Also Resolve */
+            also_resolve?: string[];
+        };
+        /** DismissOut */
+        DismissOut: {
+            /** Resolved */
+            resolved: number;
         };
         /** DraftOut */
         DraftOut: {
@@ -3961,6 +3988,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnswerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_question_unanswered__unanswered_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unanswered_id: string;
+            };
+            cookie?: {
+                satushy_access?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissOut"];
                 };
             };
             /** @description Validation Error */

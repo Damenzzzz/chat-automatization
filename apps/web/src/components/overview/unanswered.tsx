@@ -14,11 +14,31 @@ import { count, plural, whenShort } from "@/lib/format";
 type Group = Schemas["UnansweredGroupOut"];
 type Range = { date_from: string; date_to: string };
 
-function Row({ group, onAnswered }: { group: Group; onAnswered: (question: string) => void }) {
+type Outcome = { question: string; learned: boolean };
+
+function Row({ group, onResolved }: { group: Group; onResolved: (outcome: Outcome) => void }) {
   const [open, setOpen] = useState(false);
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
+  const [hiding, setHiding] = useState(false);
   const [error, setError] = useState<unknown>(null);
+
+  async function dismiss() {
+    setHiding(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.POST("/unanswered/{unanswered_id}/dismiss", {
+          params: { path: { unanswered_id: group.ids[0] } },
+          body: { also_resolve: group.ids.slice(1) },
+        }),
+      );
+      onResolved({ question: group.question, learned: false });
+    } catch (failure) {
+      setError(failure);
+      setHiding(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -31,7 +51,7 @@ function Row({ group, onAnswered }: { group: Group; onAnswered: (question: strin
           body: { answer: answer.trim(), also_resolve: group.ids.slice(1) },
         }),
       );
-      onAnswered(group.question);
+      onResolved({ question: group.question, learned: true });
     } catch (failure) {
       setError(failure);
       setBusy(false);
@@ -49,11 +69,22 @@ function Row({ group, onAnswered }: { group: Group; onAnswered: (question: strin
           </p>
         </div>
         {!open && (
-          <Button variant="secondary" onClick={() => setOpen(true)}>
-            Ответить
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" disabled={hiding} onClick={() => setOpen(true)}>
+              Ответить
+            </Button>
+            <Button
+              variant="ghost"
+              loading={hiding}
+              aria-label={`Скрыть вопрос без ответа: ${group.question}`}
+              onClick={() => void dismiss()}
+            >
+              Скрыть
+            </Button>
+          </div>
         )}
       </div>
+      {!open && <FormError error={error} />}
       {group.examples.length > 1 && (
         <p className="mt-1 text-xs text-steel">Похожие: {group.examples.slice(1, 3).join("; ")}</p>
       )}
@@ -88,16 +119,18 @@ export function Unanswered({ range }: { range: Range }) {
     `/analytics/unanswered?${range.date_from}&${range.date_to}`,
     () => unwrap(api.GET("/analytics/unanswered", { params: { query: range } })),
   );
-  const [learned, setLearned] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   if (isLoading) return <Loading />;
   if (error || !data) return <LoadError error={error} retry={() => void mutate()} />;
 
   return (
     <>
-      {learned && (
-        <Notice kind="success" className="mb-3">
-          Бот запомнил ответ на вопрос «{learned}». Начнёт отвечать через минуту.
+      {outcome && (
+        <Notice kind={outcome.learned ? "success" : "info"} className="mb-3">
+          {outcome.learned
+            ? `Бот запомнил ответ на вопрос «${outcome.question}». Начнёт отвечать через минуту.`
+            : `Вопрос «${outcome.question}» скрыт. Бот на него ответ не запоминал.`}
         </Notice>
       )}
       {data.groups.length === 0 ? (
@@ -110,8 +143,8 @@ export function Unanswered({ range }: { range: Range }) {
             <Row
               key={group.ids[0]}
               group={group}
-              onAnswered={(question) => {
-                setLearned(question);
+              onResolved={(result) => {
+                setOutcome(result);
                 void mutate();
               }}
             />
