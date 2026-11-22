@@ -149,6 +149,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - `GET /analytics/overview`, `dialogs_by_day`, `top_queries`, `unanswered` (`date_from`, `date_to`, по умолчанию 7 дней); дни считаются по `ANALYTICS_TIMEZONE`, песочница исключена.
 - `unanswered` группирует вопросы эмбеддингами с порогом `UNANSWERED_GROUP_THRESHOLD` (ML недоступен → точное совпадение текста, `grouped_by = text`).
 - `POST /unanswered/{id}/answer {answer, also_resolve}` → кусок `kb_chunks` (`source = unanswered`), ARQ `reindex_embeddings`, вопросы решены.
+- `POST /unanswered/{id}/dismiss {also_resolve}` — закрыть вопросы без ответа (спам, «спасибо»): в базу знаний ничего не пишется.
 
 ## Автоматизации и управление заявками
 
@@ -176,7 +177,7 @@ Upsert по `(tenant_id, sku_norm)`, без артикула — по `name_hash
 - API только через прокси Next: `/api/*` и `/auth/*` (`next.config.ts`, `API_INTERNAL_URL`; при `output: standalone` адрес зашивается при сборке). `/auth` отдельно: refresh-cookie живёт на этом пути.
 - Клиент: `api` из `lib/api/client.ts` (openapi-fetch, при 401 один раз обновляет сессию) и `unwrap` + SWR. Ключ SWR — строка с путём: `InboxStream` по SSE сбрасывает всё, что начинается с `/conversations` и `/leads`.
 - Новый код ошибки API — текст в `lib/api/errors.ts`. Схема поменялась — `make api-types` и коммит `schema.d.ts`.
-- API кабинета: `GET /conversations`, `/conversations/{id}`, `/conversations/stream` (SSE), `POST /conversations/{id}/takeover|release|reply`, `GET/PATCH /leads`, `GET /products`, `GET/PATCH /shop`. Стоимость модели наружу не отдаём: у сообщения только `steps`, без `llm_calls` и `cost_usd`.
+- API кабинета: `GET /conversations`, `/conversations/{id}`, `/conversations/stream` (SSE), `POST /conversations/{id}/takeover|release|reply`, `GET/PATCH /leads`, `GET /products`, `PATCH /products/{id}` (owner: `price`, `stock`, `is_active`; `null` — «не указано»; эмбеддинг не трогает, новая загрузка каталога возвращает снятый товар), `GET/PATCH /shop`. Стоимость модели наружу не отдаём: у сообщения только `steps`, без `llm_calls` и `cost_usd`.
 - Диалоги: `GET /conversations?q=` (имя, телефон, текст), в `ConversationDetail` — `customer` (история заявок, заметка `PATCH /conversations/{id}/customer`), ответ менеджера сам переводит диалог в режим human, шаблоны ответов — `shop.reply_templates` (настройки). `GET /analytics/overview` отдаёт `spent_kzt`, `found_dialogs`, `leads_done`.
 - Оболочка (`components/shell`): пауза бота, счётчики ожидающих и новых заявок, нижняя панель на телефоне, счётчик в заголовке вкладки, палитра ⌘K (`command-palette.tsx`, открыть из кода — `openPalette()`).
 - Типы без запущенного api: `app.openapi()` в JSON → `npx openapi-typescript файл.json -o src/lib/api/schema.d.ts`.
