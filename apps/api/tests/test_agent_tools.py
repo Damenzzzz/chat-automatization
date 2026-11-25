@@ -123,11 +123,42 @@ async def test_handoff_tool(shop: tuple[uuid.UUID, uuid.UUID], owner_engine: Asy
 async def test_run_dispatch_errors(shop: tuple[uuid.UUID, uuid.UUID]) -> None:
     tools, _ = box(shop)
     assert "error" in (await tools.run(ToolCall("drop_tables", {}))).result
-    assert "error" in (await tools.run(ToolCall("get_product", {"bad": 1}))).result
-    bad_qty = {"items": [{"sku": "RS-101", "qty": "2 шт"}], "contact_phone": "+77011234567"}
-    assert "error" in (await tools.run(ToolCall("create_lead", bad_qty))).result
+    missing = await tools.run(ToolCall("get_product", {"bad": 1}))
+    assert missing.result["error"].startswith("неверные аргументы: sku")
+    wrong = await tools.run(ToolCall("search_products", {"query": "пионы", "budget_max": "дёшево"}))
+    assert "budget_max" in wrong.result["error"]
     ok = await tools.run(ToolCall("get_product", {"sku": "RS-101"}))
     assert ok.result["product"]["stock"] == 0
+
+
+async def test_run_coerces_model_arguments(shop: tuple[uuid.UUID, uuid.UUID]) -> None:
+    tools, _ = box(shop)
+    found = await tools.run(
+        ToolCall("search_products", {"query": "букет", "budget_max": "25к", "extra": True})
+    )
+    prices = [p["price"] for p in found.result["products"]]
+    assert prices and max(prices) <= 25000
+    lead = await tools.run(
+        ToolCall(
+            "create_lead",
+            {"items": [{"sku": "PN-001", "qty": "2 шт"}], "contact_phone": "+77011234567"},
+        )
+    )
+    assert lead.result["total_kzt"] == 64000
+
+
+async def test_tool_failure_does_not_break_turn(
+    shop: tuple[uuid.UUID, uuid.UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tools, _ = box(shop)
+
+    async def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("база недоступна")
+
+    monkeypatch.setattr("app.agent.tools.search_products", broken)
+    outcome = await tools.run(ToolCall("search_products", {"query": "пионы"}))
+    assert outcome.result["error"].startswith("инструмент временно недоступен")
+    assert outcome.context == []
 
 
 async def test_retrieve_node_puts_products_in_context(

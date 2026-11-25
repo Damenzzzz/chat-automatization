@@ -3,8 +3,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
+from pydantic import ValidationError
 from sqlalchemy import select, update
 
+from app.agent.args import ARGS, MAX_QTY, explain
 from app.auth.identity import normalize_phone
 from app.catalog.normalize import sku_norm
 from app.core.poke import poke
@@ -18,7 +20,9 @@ from app.search.types import KbHit, ProductHit, SearchML
 log = structlog.get_logger()
 
 NOTIFY = "notify_manager"
-MAX_QTY = 999
+TOOL_FAILED = (
+    "инструмент временно недоступен: ответь по уже найденным данным или предложи позвать менеджера"
+)
 
 TOOLS = [
     Tool(
@@ -285,11 +289,16 @@ class ToolBox:
         )
 
     async def run(self, call: ToolCall) -> ToolOutcome:
-        handler = getattr(self, call.name, None) if call.name in {t.name for t in TOOLS} else None
-        if handler is None:
+        schema = ARGS.get(call.name)
+        if schema is None:
             return ToolOutcome({"error": f"неизвестный инструмент {call.name}"})
         try:
-            outcome: ToolOutcome = await handler(**call.args)
-        except (TypeError, ValueError, AttributeError) as exc:
-            return ToolOutcome({"error": f"неверные аргументы: {exc}"})
+            args = schema.model_validate(call.args)
+        except ValidationError as exc:
+            return ToolOutcome({"error": f"неверные аргументы: {explain(exc)}"})
+        try:
+            outcome: ToolOutcome = await getattr(self, call.name)(**args.model_dump())
+        except Exception:
+            log.exception("agent.tool_failed", tool=call.name)
+            return ToolOutcome({"error": TOOL_FAILED})
         return outcome
