@@ -36,6 +36,28 @@ STOCK = re.compile(
     rf"|(?P<b>\d+)\s*(?:шт\.?|штук\w*|дана)\s*(?:{STOCK_WORDS})",
     re.IGNORECASE,
 )
+TOPICS = {
+    "возврат и обмен": re.compile(r"возврат|вернуть|верн[её]м|обмен|қайтар|ауыстыр", re.I),
+    "скидки и акции": re.compile(r"скидк|акци[яиюй]|промокод|жеңілдік", re.I),
+    "гарантию": re.compile(r"гаранти|кепілдік", re.I),
+    "рассрочку": re.compile(r"рассрочк|кредит|бөліп төле", re.I),
+}
+DEFER = re.compile(r"уточн|менеджер|нақтыла|узна[юе]", re.I)
+NO_TERMS = "в данных магазина нет условий про"
+PROMISE = re.compile(
+    r"уточн\w*[^.!?\n]{0,40}менеджер"
+    r"|менеджер\w*[^.!?\n]{0,30}(подключ|свяж|ответ|напиш|перезвон)"
+    r"|передал\w*[^.!?\n]{0,30}менеджер"
+    r"|менеджер\w*[^.!?\n]{0,30}(нақтыла|жауап|хабарлас|қосыл)",
+    re.IGNORECASE,
+)
+
+
+def promises_manager(reply: str) -> bool:
+    """Бот пообещал, что дальше ответит человек: тогда диалог должен уйти менеджеру."""
+    return bool(PROMISE.search(reply))
+
+
 KK_CHECK_WORDS = 6
 WELL_KNOWN = frozenset({"kaspi.kz"})
 SENTENCE = re.compile(r"[!?\n]+|\.\s+(?=[A-ZА-ЯЁӘҒҚҢӨҰҮҺІ])")
@@ -135,7 +157,9 @@ def _url_key(value: str) -> str:
     return key.rstrip(".!?/")
 
 
-def sources_text(context: list[dict[str, Any]], profile: ShopProfile, customer_text: str) -> str:
+def sources_text(
+    context: list[dict[str, Any]], profile: ShopProfile, customer_text: str = ""
+) -> str:
     parts = [
         profile.tone or "",
         profile.greeting or "",
@@ -179,6 +203,11 @@ def check_facts(
         value = int(match["a"] or match["b"])
         if value not in allowed:
             errors.append(f"остаток «{match.group(0)}» не совпадает с каталогом")
+    shop_data = sources_text(context, profile)
+    if not DEFER.search(reply):
+        for topic, pattern in TOPICS.items():
+            if pattern.search(reply) and not pattern.search(shop_data):
+                errors.append(f"{NO_TERMS} {topic}: не придумывай, предложи уточнить у менеджера")
     words = WORD.findall(reply)
     kk_shop = "kk" in profile.languages
     if lang == "kk" and kk_shop and len(words) >= KK_CHECK_WORDS and detect_lang(reply) == "ru":

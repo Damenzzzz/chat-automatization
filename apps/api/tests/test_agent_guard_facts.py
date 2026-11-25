@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from app.agent.guard import check_reply
+from app.agent.guard import check_reply, promises_manager
 from app.agent.prompt import ShopProfile
 
 PROFILE = ShopProfile(name="Цветы", rules={"contacts": "Сайт pion.kz, Instagram @pion"})
@@ -71,3 +71,51 @@ def test_kazakh_customer_needs_kazakh_reply() -> None:
     assert errors(russian, lang="mixed") == []
     only_ru = ShopProfile(name="Цветы", languages=("ru",))
     assert check_reply(russian, CONTEXT, only_ru, lang="kk").ok
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Свежие цветы возврату и обмену не подлежат.",
+        "Сейчас действует скидка 10% на всё.",
+        "Дарим гарантию свежести 7 дней.",
+        "Можно оформить рассрочку.",
+        "Гүлдерді қайтаруға болмайды.",
+    ],
+)
+def test_invented_shop_terms_are_caught(reply: str) -> None:
+    assert any(e.startswith("в данных магазина нет условий про") for e in errors(reply))
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Про возврат уточню у менеджера и вернусь с ответом.",
+        "Қайтару туралы менеджерден нақтылап беремін.",
+        "Фото букета пришлём перед выездом курьера.",
+    ],
+)
+def test_deferred_or_unrelated_terms_pass(reply: str) -> None:
+    assert errors(reply) == []
+
+
+def test_terms_from_knowledge_base_pass() -> None:
+    kb = {"type": "kb", "id": "r", "source": "returns", "text": "Возврат возможен в течение часа"}
+    reply = "Возврат возможен в течение часа после доставки."
+    assert check_reply(reply, [*CONTEXT, kb], PROFILE, lang="ru").ok
+
+
+@pytest.mark.parametrize(
+    ("reply", "promised"),
+    [
+        ("Уточню этот вопрос у менеджера и вернусь с ответом.", True),
+        ("Менеджер скоро подключится к чату.", True),
+        ("Передала ваш вопрос менеджеру.", True),
+        ("Менеджер сізге жақын арада жауап береді.", True),
+        ("Бұл сұрақты менеджерден нақтылап, жауап беремін.", True),
+        ("Пионы стоят 32 000 ₸, оформить заказ?", False),
+        ("Если захотите, позову менеджера.", False),
+    ],
+)
+def test_manager_promise(reply: str, promised: bool) -> None:
+    assert promises_manager(reply) is promised

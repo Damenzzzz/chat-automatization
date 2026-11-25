@@ -11,7 +11,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.graph import MAX_RETRIES, MAX_TOOL_HOPS
-from app.agent.guard import check_reply
+from app.agent.guard import NO_TERMS, check_reply, promises_manager
 from app.agent.llmcall import call_llm
 from app.agent.prompt import load_profile
 from app.agent.respond import FALLBACK, ai_message, build_messages, pick_model, tool_message
@@ -581,7 +581,11 @@ class AgentNodes:
             errors=result.errors,
         )
         if result.ok:
-            return {"check_ok": True, "check_errors": [], "trace": trace}
+            if state.get("human_mode") or not promises_manager(reply):
+                return {"check_ok": True, "check_errors": [], "trace": trace}
+            await self.toolbox(state).handoff("бот пообещал уточнить у менеджера")
+            trace = [*trace[:-1], {**trace[-1], "promised_manager": True}]
+            return {"check_ok": True, "check_errors": [], "human_mode": True, "trace": trace}
         update: dict[str, Any] = {"check_ok": False, "check_errors": result.errors, "trace": trace}
         if last.id:
             update["messages"] = [RemoveMessage(id=last.id)]
@@ -668,6 +672,16 @@ class AgentNodes:
         if state.get("follow_up") and any(c.get("recent") for c in context):
             found = True
         if state.get("kb_query") and not any(c["type"] == "kb" for c in context):
+            return True
+        guessed = (
+            NO_TERMS in error
+            for t in state.get("trace", [])
+            if t["node"] == "guard_out"
+            for error in t.get("errors", [])
+        )
+        if any(guessed):
+            return True
+        if any(t.get("promised_manager") for t in state.get("trace", [])):
             return True
         return state.get("intent") in ("product", "policy") and not found
 

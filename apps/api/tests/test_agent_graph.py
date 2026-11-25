@@ -27,7 +27,10 @@ async def test_smalltalk_path(owner_engine: AsyncEngine) -> None:
 async def test_checkpointer_keeps_history_per_conversation(owner_engine: AsyncEngine) -> None:
     tenant_id, first = await make_conversation(owner_engine)
     _, second = await make_conversation(owner_engine, tenant_id)
-    agent, _ = await make_agent()
+    talk = Understanding(lang="ru", intent="smalltalk", complexity="low")
+    agent, _ = await make_agent(
+        FakeLLM([talk, "Здравствуйте!", talk, "Подскажу с выбором.", talk, "Сәлем!"])
+    )
     for text in ("привет", "есть пионы?"):
         await agent.run(tenant_id=tenant_id, conversation_id=first, text=text)
     await agent.run(tenant_id=tenant_id, conversation_id=second, text="салем")
