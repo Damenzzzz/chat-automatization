@@ -16,6 +16,9 @@ def staff_text(event: str, payload: Mapping[str, Any]) -> str | None:
     dialog = f"{web}/dialogs?id={payload.get('conversation_id')}"
     if event == "lead.created":
         return f"Новая заявка на {money(int(payload.get('total_kzt') or 0))}.\n{web}/leads"
+    if event == "lead.updated":
+        total = money(int(payload.get("total_kzt") or 0))
+        return f"Покупатель уточнил заявку на {total}: адрес, время или контакты.\n{web}/leads"
     if event == "lead.stale":
         total = money(int(payload.get("total_kzt") or 0))
         return (

@@ -1,10 +1,12 @@
 import uuid
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 
 import structlog
 from pydantic import ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.args import ARGS, MAX_QTY, explain
 from app.auth.identity import normalize_phone
@@ -20,6 +22,8 @@ from app.search.types import KbHit, ProductHit, SearchML
 log = structlog.get_logger()
 
 NOTIFY = "notify_manager"
+REPEAT_WINDOW = timedelta(minutes=30)
+OPEN_LEAD = ("new", "in_progress")
 TOOL_FAILED = (
     "инструмент временно недоступен: ответь по уже найденным данным или предложи позвать менеджера"
 )
@@ -120,6 +124,10 @@ def kb_item(hit: KbHit) -> dict[str, Any]:
     }
 
 
+def _basket(items: list[Any]) -> set[tuple[str | None, int]]:
+    return {(sku_norm(str(i.get("sku") or "")), int(i.get("qty") or 1)) for i in items}
+
+
 def merge_context(
     context: list[dict[str, Any]], items: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -142,6 +150,17 @@ class ToolOutcome:
     result: dict[str, Any]
     context: list[dict[str, Any]] = field(default_factory=list)
     human_mode: bool = False
+
+
+def _lead_outcome(lead: Lead, products: list[Product], *, repeated: bool) -> ToolOutcome:
+    number = str(lead.id)[:8]
+    total = lead.total_kzt or 0
+    result: dict[str, Any] = {"lead_number": number, "total_kzt": total, "items": lead.items}
+    if repeated:
+        result["note"] = "заявка с этими товарами уже оформлена, новую не создаём"
+    context = [product_item(p) for p in products]
+    context.append({"type": "lead", "id": str(lead.id), "number": number, "total_kzt": total})
+    return ToolOutcome(result, context)
 
 
 @dataclass
@@ -253,26 +272,58 @@ class ToolBox:
                 for code, p in products.items()
             ]
             total = sum((p.price or 0) * wanted[code] for code, p in products.items())
-            lead = Lead(
-                tenant_id=self.tenant_id,
-                conversation_id=self.conversation_id,
-                items=lines,
-                total_kzt=total,
-                contact_name=contact_name,
-                contact_phone=phone,
-                address=address,
-                delivery_note=delivery_time,
-                comment=comment,
-            )
-            session.add(lead)
+            given = {
+                "contact_name": contact_name,
+                "address": address,
+                "delivery_note": delivery_time,
+                "comment": comment,
+            }
+            details = {column: value for column, value in given.items() if value}
+            repeated = await self.recent_lead(session, phone, lines)
+            if repeated is not None:
+                changed = {k: v for k, v in details.items() if getattr(repeated, k) != v}
+                for column, value in changed.items():
+                    setattr(repeated, column, value)
+                lead, created = repeated, False
+            else:
+                changed = {}
+                lead = Lead(
+                    tenant_id=self.tenant_id,
+                    conversation_id=self.conversation_id,
+                    items=lines,
+                    total_kzt=total,
+                    contact_phone=phone,
+                    **details,
+                )
+                session.add(lead)
+                created = True
             await session.flush()
-            number = str(lead.id)[:8]
-            lead_id = lead.id
-        await poke(self.tenant_id)
-        await self.notify("lead.created", {"lead_id": str(lead_id), "total_kzt": total})
-        context = [product_item(p) for p in products.values()]
-        context.append({"type": "lead", "id": str(lead_id), "number": number, "total_kzt": total})
-        return ToolOutcome({"lead_number": number, "total_kzt": total, "items": lines}, context)
+            outcome = _lead_outcome(lead, list(products.values()), repeated=not created)
+            payload = {"lead_id": str(lead.id), "total_kzt": lead.total_kzt}
+        if created:
+            await poke(self.tenant_id)
+            await self.notify("lead.created", payload)
+        elif changed:
+            await poke(self.tenant_id)
+            await self.notify("lead.updated", {**payload, "fields": sorted(changed)})
+        return outcome
+
+    async def recent_lead(
+        self, session: AsyncSession, phone: str, lines: list[dict[str, Any]]
+    ) -> Lead | None:
+        rows = await session.scalars(
+            select(Lead)
+            .where(
+                Lead.conversation_id == self.conversation_id,
+                Lead.contact_phone == phone,
+                Lead.status.in_(OPEN_LEAD),
+                Lead.created_at >= func.now() - REPEAT_WINDOW,
+            )
+            .order_by(Lead.created_at.desc())
+            .with_for_update()
+        )
+        basket = _basket(lines)
+        return next((lead for lead in rows if _basket(lead.items) == basket), None)
 
     async def handoff(self, reason: str) -> ToolOutcome:
         async with tenant_session(self.tenant_id) as session:

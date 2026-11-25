@@ -195,3 +195,49 @@ async def test_handoff_intent_switches_mode(
     assert queue.jobs[0][1][1] == "handoff"
     second = await agent.run(tenant_id=tenant_id, conversation_id=conversation_id, text="алло")
     assert second.reply is None
+
+
+async def _leads(engine: AsyncEngine, tenant_id: uuid.UUID) -> list[tuple[str | None, int]]:
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text("SELECT address, total_kzt FROM leads WHERE tenant_id = :t ORDER BY created_at"),
+            {"t": tenant_id},
+        )
+        return [tuple(r) for r in rows]
+
+
+async def test_repeated_lead_is_not_duplicated(
+    shop: tuple[uuid.UUID, uuid.UUID], owner_engine: AsyncEngine
+) -> None:
+    tools, queue = box(shop)
+    first = await tools.create_lead(
+        [{"sku": "PN-001", "qty": 2}], "+77001234567", address="Абая 10"
+    )
+    again = await tools.create_lead([{"sku": "pn001", "qty": 2}], "8 700 123 45 67")
+
+    assert again.result["lead_number"] == first.result["lead_number"]
+    assert "уже оформлена" in again.result["note"]
+    assert again.context[-1]["type"] == "lead"
+    assert await _leads(owner_engine, shop[0]) == [("Абая 10", 64000)]
+    assert [job[1][1] for job in queue.jobs] == ["lead.created"]
+
+    fixed = await tools.create_lead(
+        [{"sku": "PN-001", "qty": 2}], "+77001234567", address="Достык 5"
+    )
+    assert fixed.result["lead_number"] == first.result["lead_number"]
+    assert await _leads(owner_engine, shop[0]) == [("Достык 5", 64000)]
+    assert [job[1][1] for job in queue.jobs] == ["lead.created", "lead.updated"]
+
+
+async def test_other_basket_or_closed_lead_creates_new(
+    shop: tuple[uuid.UUID, uuid.UUID], owner_engine: AsyncEngine
+) -> None:
+    tools, _ = box(shop)
+    await tools.create_lead([{"sku": "PN-001"}], "+77001234567")
+    await tools.create_lead([{"sku": "PN-001", "qty": 3}], "+77001234567")
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE leads SET status = 'done' WHERE tenant_id = :t"), {"t": shop[0]}
+        )
+    await tools.create_lead([{"sku": "PN-001"}], "+77001234567")
+    assert [total for _, total in await _leads(owner_engine, shop[0])] == [32000, 96000, 32000]

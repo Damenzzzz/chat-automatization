@@ -40,6 +40,9 @@ def test_staff_text_links_to_dialog() -> None:
     assert "оптовый заказ" in text
     assert text.endswith("/dialogs?id=c1")
     assert staff_text("unknown", {}) is None
+    updated = staff_text("lead.updated", {"total_kzt": 64000})
+    assert updated is not None
+    assert updated.startswith("Покупатель уточнил заявку на 64 000 ₸")
 
 
 def test_bot_knows_shop_local_time() -> None:
