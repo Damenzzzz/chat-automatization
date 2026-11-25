@@ -141,11 +141,17 @@ def context_block(
     known = {k: v for k, v in (slots or {}).items() if v is not None}
     if known:
         lines.append("Известно: " + "; ".join(f"{k} = {v}" for k, v in known.items()) + ".")
-    products = [c for c in context if c.get("type") == "product"]
+    products = [c for c in context if c.get("type") == "product" and not c.get("recent")]
+    recent = [c for c in context if c.get("type") == "product" and c.get("recent")]
     chunks = [c for c in context if c.get("type") == "kb"]
     leads = [c for c in context if c.get("type") == "lead"]
     if products:
         lines += ["Товары из каталога (цены и остатки актуальные):", *map(_product_line, products)]
+    if recent:
+        lines += [
+            "Товары, о которых уже говорили в диалоге (цены и остатки актуальные):",
+            *map(_product_line, recent),
+        ]
     if chunks:
         lines.append("База знаний магазина:")
         lines += [f"- {c.get('title') or c.get('source')}: {c['text']}" for c in chunks]

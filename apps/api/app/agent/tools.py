@@ -131,13 +131,15 @@ def _basket(items: list[Any]) -> set[tuple[str | None, int]]:
 def merge_context(
     context: list[dict[str, Any]], items: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    seen = {(c.get("type"), c.get("id")) for c in context}
     merged = list(context)
+    index = {(c.get("type"), c.get("id")): i for i, c in enumerate(merged)}
     for item in items:
         key = (item.get("type"), item.get("id"))
-        if key not in seen:
-            seen.add(key)
+        if key not in index:
+            index[key] = len(merged)
             merged.append(item)
+        elif merged[index[key]].get("recent") and not item.get("recent"):
+            merged[index[key]] = item
     return merged
 
 

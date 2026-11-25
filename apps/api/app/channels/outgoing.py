@@ -27,7 +27,9 @@ def button_text(payload: str) -> str | None:
     return ORDER_TEXT[match[1]].format(sku=match[2]) if match else None
 
 
-def mentioned_products(reply: str, context: Iterable[dict[str, Any]]) -> list[str]:
+def mentioned_products(
+    reply: str, context: Iterable[dict[str, Any]], limit: int | None = MAX_CARDS
+) -> list[str]:
     text = reply.casefold()
     ids = []
     for item in context:
@@ -36,7 +38,7 @@ def mentioned_products(reply: str, context: Iterable[dict[str, Any]]) -> list[st
         names = (item.get("name"), item.get("sku"))
         if any(name and str(name).casefold() in text for name in names):
             ids.append(str(item["id"]))
-    return ids[:MAX_CARDS]
+    return ids if limit is None else ids[:limit]
 
 
 def product_card(

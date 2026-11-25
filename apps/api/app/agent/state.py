@@ -25,6 +25,8 @@ class ChatState(TypedDict, total=False):
     slots: dict[str, Any]
     search_query: str | None
     context: list[dict[str, Any]]
+    recent_products: list[str]
+    follow_up: bool
     tool_hops: int
     retries: int
     check_ok: bool

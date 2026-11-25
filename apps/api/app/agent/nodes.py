@@ -17,7 +17,7 @@ from app.agent.prompt import load_profile
 from app.agent.respond import FALLBACK, ai_message, build_messages, pick_model, tool_message
 from app.agent.session import new_session
 from app.agent.state import ChatState, step
-from app.agent.tools import TOOLS, ToolBox, merge_context
+from app.agent.tools import TOOLS, ToolBox, merge_context, product_item
 from app.agent.understand import (
     MAX_INPUT_CHARS,
     Understanding,
@@ -44,6 +44,8 @@ log = structlog.get_logger()
 
 
 VOICE_PLACEHOLDER = "[голосовое сообщение]"
+MAX_RECENT = 8
+FOLLOW_UP_PICK = 3
 PAUSE_REPLY = {
     "ru": "Спасибо за сообщение! Менеджер скоро вам ответит.",
     "kk": "Хабарламаңызға рақмет! Менеджер жақын арада жауап береді.",
@@ -90,11 +92,22 @@ class AgentNodes:
     def tenant(self, state: ChatState) -> uuid.UUID:
         return uuid.UUID(state["tenant_id"])
 
+    async def recall(self, session: AsyncSession, ids: list[str]) -> list[dict[str, Any]]:
+        if not ids:
+            return []
+        rows = await session.scalars(
+            select(Product).where(Product.id.in_([uuid.UUID(i) for i in ids]), Product.is_active)
+        )
+        found = {str(p.id): p for p in rows}
+        return [{**product_item(found[i]), "recent": True} for i in ids if i in found]
+
     async def ingest(self, state: ChatState) -> dict[str, Any]:
         conversation_id = uuid.UUID(state["conversation_id"])
         text = last_human(state)
         external_id = state.get("external_id")
         duplicate: str | None = None
+        fresh_session = new_session(state.get("messages", []))
+        recalled: list[dict[str, Any]] = []
         async with tenant_session(self.tenant(state)) as session:
             mode = await session.scalar(
                 select(Conversation.mode).where(Conversation.id == conversation_id)
@@ -128,6 +141,8 @@ class AgentNodes:
                 )
                 session.add(message)
                 await session.flush()
+                if not fresh_session:
+                    recalled = await self.recall(session, state.get("recent_products", []))
                 await session.execute(
                     update(Conversation)
                     .where(Conversation.id == conversation_id)
@@ -142,16 +157,18 @@ class AgentNodes:
                 "human_mode": mode == "human",
                 "customer_message_id": str(message.id),
             }
-        fresh: dict[str, Any] = {"slots": {}} if new_session(state.get("messages", [])) else {}
+        fresh: dict[str, Any] = {"slots": {}} if fresh_session else {}
         return {
             **fresh,
+            "recent_products": [c["id"] for c in recalled],
+            "follow_up": False,
             "duplicate": None,
             "human_mode": mode == "human" or shop_paused,
             "customer_message_id": str(message.id),
             "voice_failed": False,
             "send_failed": False,
             "paused": None,
-            "context": [],
+            "context": recalled,
             "tool_hops": 0,
             "retries": 0,
             "check_ok": False,
@@ -338,6 +355,7 @@ class AgentNodes:
             "complexity": result.complexity,
             "slots": slots,
             "search_query": result.search_query or text,
+            "follow_up": result.follow_up,
             "usage": usage,
             "trace": step(
                 state,
@@ -346,6 +364,7 @@ class AgentNodes:
                 lang=result.lang,
                 intent=result.intent,
                 complexity=result.complexity,
+                follow_up=result.follow_up,
                 slots=slots,
             ),
         }
@@ -415,11 +434,18 @@ class AgentNodes:
             )
         if state.get("human_mode"):
             notes.append("Диалог передан менеджеру: скажи, что менеджер скоро подключится.")
-        if intent == "product" and not any(c["type"] == "product" for c in context):
-            notes.append(
-                "В каталоге ничего не нашлось. Не выдумывай товары: предложи уточнить запрос"
-                " или позвать менеджера."
-            )
+        if intent == "product" and not self.found_new(state):
+            if any(c.get("recent") for c in context):
+                notes.append(
+                    "По этому сообщению в каталоге ничего нового не нашлось. Если покупатель"
+                    " спрашивает про уже обсуждённые товары, отвечай по ним; иначе не выдумывай"
+                    " товары: предложи уточнить запрос или позвать менеджера."
+                )
+            else:
+                notes.append(
+                    "В каталоге ничего не нашлось. Не выдумывай товары: предложи уточнить запрос"
+                    " или позвать менеджера."
+                )
         if intent == "policy" and not any(c["type"] == "kb" for c in context):
             notes.append("В базе знаний ответа нет. Не выдумывай: предложи уточнить у менеджера.")
         if state.get("tool_hops", 0) >= MAX_TOOL_HOPS:
@@ -588,6 +614,18 @@ class AgentNodes:
         )
         return {"reply": reply, "trace": trace}
 
+    def found_new(self, state: ChatState) -> bool:
+        return any(c["type"] == "product" and not c.get("recent") for c in state.get("context", []))
+
+    def remembered(self, state: ChatState) -> list[str]:
+        reply = state.get("reply") or ""
+        products = [c for c in state.get("context", []) if c["type"] == "product"]
+        picked = mentioned_products(reply, products, limit=None)
+        if not picked and state.get("intent") == "product":
+            picked = [c["id"] for c in products if not c.get("recent")][:FOLLOW_UP_PICK]
+        previous = state.get("recent_products", [])
+        return list(dict.fromkeys([*picked, *previous]))[:MAX_RECENT]
+
     def unanswered(self, state: ChatState) -> bool:
         if state.get("paused"):
             return False
@@ -595,7 +633,10 @@ class AgentNodes:
             return True
         if any(t.get("source") == "no_llm" for t in state.get("trace", [])):
             return True
-        found = any(c["type"] in ("product", "kb") for c in state.get("context", []))
+        context = state.get("context", [])
+        found = self.found_new(state) or any(c["type"] == "kb" for c in context)
+        if state.get("follow_up") and any(c.get("recent") for c in context):
+            found = True
         return state.get("intent") in ("product", "policy") and not found
 
     def billable(self, state: ChatState) -> bool:
@@ -664,4 +705,4 @@ class AgentNodes:
             await poke(state["tenant_id"])
         if alert:
             await self.deps.queue.enqueue(NOTIFY_OWNER, state["tenant_id"], alert)
-        return {"trace": trace}
+        return {"trace": trace, "recent_products": self.remembered(state)}
