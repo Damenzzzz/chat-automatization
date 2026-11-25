@@ -4,6 +4,7 @@ from typing import Literal
 from langchain_core.messages import AnyMessage, HumanMessage
 from pydantic import BaseModel, Field
 
+from app.agent.args import parse_money
 from app.llm import Message
 from app.search.candidates import sku_codes
 from app.search.lang import detect_lang
@@ -93,13 +94,65 @@ def router_messages(history: list[AnyMessage], text: str) -> list[Message]:
     ]
 
 
+HUMAN_WORDS = re.compile(
+    r"менеджер|оператор|живо[йм] человек|позовите|позвоните мне|жалоб|"
+    r"адаммен|менеджерге|оператормен|шағым",
+    re.IGNORECASE,
+)
+ORDER_WORDS = re.compile(
+    r"оформ|закаж|заказать|хочу купить|беру\b|возьму|тапсырыс|аламын|сатып алғым",
+    re.IGNORECASE,
+)
+POLICY_WORDS = re.compile(
+    r"доставк|доставляете|оплат|kaspi|каспи|наличн|возврат|вернуть|обмен|адрес|где вы|"
+    r"где находит|график|до скольки|работаете|самовывоз|гаранти|"
+    r"жеткіз|төле|қайтар|мекенжай|қай жерде|жұмыс уақыт|неше(ге)? дейін",
+    re.IGNORECASE,
+)
+SMALLTALK_WORDS = re.compile(
+    r"^(привет|здравствуйте|здрасте|добрый (день|вечер)|доброе утро|спасибо|благодарю|"
+    r"ок|окей|хорошо|понятно|пока|до свидания|сәлем|салем|сәлеметсіз бе|рахмет|рақмет|"
+    r"жарайды|түсінікті|сау болыңыз)[\s!.,)]*$",
+    re.IGNORECASE,
+)
+BUDGET = re.compile(
+    r"(?:до|не дороже|в пределах|максимум)\s*(?P<ru>\d[\d\s\u00a0]*(?:[.,]\d+)?"
+    r"\s*(?:к|k|тыс\.?|тысяч\w*)?)"
+    r"|(?P<kk>\d[\d\s\u00a0]*\s*(?:к|k|мың)?)\w*\s*(?:теңге\w*|тг|₸)?\s*дейін",
+    re.IGNORECASE,
+)
+
+
+MIN_BUDGET = 100
+
+
+def guess_intent(text: str) -> Intent:
+    if HUMAN_WORDS.search(text):
+        return "human"
+    if ORDER_WORDS.search(text):
+        return "order"
+    if POLICY_WORDS.search(text):
+        return "policy"
+    if SMALLTALK_WORDS.match(text.strip()):
+        return "smalltalk"
+    return "product"
+
+
+def guess_budget(text: str) -> int | None:
+    match = BUDGET.search(text)
+    if not match:
+        return None
+    value = parse_money((match["ru"] or match["kk"]).strip())
+    return value if isinstance(value, int) and value >= MIN_BUDGET else None
+
+
 def heuristic(text: str) -> Understanding:
     codes = sku_codes(text)
     return Understanding(
         lang=detect_lang(text) or "ru",
-        intent="product",
+        intent=guess_intent(text),
         complexity="low",
-        slots=Slots(sku=codes[0] if codes else None),
+        slots=Slots(sku=codes[0] if codes else None, budget_max=guess_budget(text)),
         search_query=text,
     )
 
