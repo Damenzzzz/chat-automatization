@@ -12,7 +12,10 @@ from app.llm.fake import FakeLLM
 from tests.agent_helpers import make_agent, make_conversation, nodes
 from tests.fake_ml import make_shop
 
-PROFILE = ShopProfile(name="Пион", rules={"delivery": "Доставка по Алматы 2 000 ₸"})
+PROFILE = ShopProfile(
+    name="Пион",
+    rules={"delivery": "Доставка по Алматы 2 000 ₸", "contacts": "Телефон +7 700 000 00 00"},
+)
 CONTEXT: list[dict[str, Any]] = [
     {"type": "product", "sku": "PN-001", "sku_norm": "PN001", "price": 22900, "stock": 3},
     {"type": "product", "sku": "GF-601", "sku_norm": "GF601", "price": 1500, "stock": 9},

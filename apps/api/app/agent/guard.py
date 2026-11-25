@@ -5,6 +5,7 @@ from typing import Any
 
 from app.agent.prompt import ShopProfile, money
 from app.catalog.normalize import sku_norm
+from app.search.lang import WORD, detect_lang
 
 NUMBER = r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?"
 AMOUNT = re.compile(
@@ -19,6 +20,24 @@ NOISE = re.compile(
     r"|\d+(?:[.,]\d+)?\s*%"
     r"|\d{1,2}\.\d{1,2}\.\d{2,4}"
 )
+PHONE = re.compile(
+    r"\+?[78][\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}"
+    r"|\b\d{3}[\s-]\d{2}[\s-]\d{2}\b"
+)
+DOMAINS = "kz|ru|com|app|me|shop|store|net|org"
+URL = re.compile(
+    r"(?:https?://|www\.)[^\s,;)»\"]+"
+    rf"|\b[\w-]+\.(?:{DOMAINS})\b(?:/[^\s,;)»\"]*)?",
+    re.IGNORECASE,
+)
+STOCK_WORDS = r"в наличии|наличии|осталось|остаток|осталась|остался|қалды|бар"
+STOCK = re.compile(
+    rf"(?:{STOCK_WORDS})\D{{0,12}}?(?P<a>\d+)\s*(?:шт|штук|дана)"
+    rf"|(?P<b>\d+)\s*(?:шт\.?|штук\w*|дана)\s*(?:{STOCK_WORDS})",
+    re.IGNORECASE,
+)
+KK_CHECK_WORDS = 6
+WELL_KNOWN = frozenset({"kaspi.kz"})
 SENTENCE = re.compile(r"[!?\n]+|\.\s+(?=[A-ZА-ЯЁӘҒҚҢӨҰҮҺІ])")
 SKU_LIKE = re.compile(r"(?<![\w-])[A-Za-zА-ЯЁа-яё]{1,5}-?\d{2,}[A-Za-z0-9-]*(?![\w-])")
 MAX_TERMS = 4
@@ -103,12 +122,77 @@ def allowed_base(
     return base
 
 
+def phones(text: str) -> set[str]:
+    return {re.sub(r"\D", "", m)[-7:] for m in PHONE.findall(text)}
+
+
+def urls(text: str) -> set[str]:
+    return {_url_key(m) for m in URL.findall(text)}
+
+
+def _url_key(value: str) -> str:
+    key = re.sub(r"^(?:https?://)?(?:www\.)?", "", value.lower())
+    return key.rstrip(".!?/")
+
+
+def sources_text(context: list[dict[str, Any]], profile: ShopProfile, customer_text: str) -> str:
+    parts = [
+        profile.tone or "",
+        profile.greeting or "",
+        *map(str, profile.rules.values()),
+        customer_text,
+    ]
+    for item in context:
+        if item.get("type") == "kb":
+            parts += [str(item.get("title") or ""), str(item.get("text") or "")]
+        elif item.get("type") == "product":
+            parts += [str(item.get("description") or ""), str(item.get("attributes") or "")]
+    return "\n".join(parts)
+
+
+def check_facts(
+    reply: str,
+    context: list[dict[str, Any]],
+    profile: ShopProfile,
+    customer_text: str,
+    lang: str | None,
+) -> list[str]:
+    errors: list[str] = []
+    source = sources_text(context, profile, customer_text)
+    known_phones = phones(source)
+    for match in PHONE.finditer(reply):
+        if re.sub(r"\D", "", match.group(0))[-7:] not in known_phones:
+            errors.append(f"телефона «{match.group(0).strip()}» нет в данных магазина")
+    known_urls = urls(source) | WELL_KNOWN
+    for match in URL.finditer(reply):
+        key = _url_key(match.group(0))
+        if not any(key == k or key.startswith(k + "/") or k.startswith(key) for k in known_urls):
+            errors.append(f"ссылки «{match.group(0)}» нет в данных магазина")
+    stocks = {
+        int(item["stock"])
+        for item in context
+        if item.get("type") == "product" and item.get("stock") is not None
+    }
+    names = " ".join(str(item.get("name") or "") for item in context)
+    allowed = stocks | numbers(names) | numbers(source)
+    for match in STOCK.finditer(reply):
+        value = int(match["a"] or match["b"])
+        if value not in allowed:
+            errors.append(f"остаток «{match.group(0)}» не совпадает с каталогом")
+    words = WORD.findall(reply)
+    kk_shop = "kk" in profile.languages
+    if lang == "kk" and kk_shop and len(words) >= KK_CHECK_WORDS and detect_lang(reply) == "ru":
+        errors.append("покупатель пишет по-казахски, а ответ на русском")
+    return errors
+
+
 def check_reply(
     reply: str,
     context: list[dict[str, Any]],
     profile: ShopProfile,
     customer_text: str = "",
     slots: dict[str, Any] | None = None,
+    lang: str | None = None,
 ) -> CheckResult:
     result = CheckResult()
     if not reply.strip():
@@ -131,4 +215,5 @@ def check_reply(
         result.skus.append(code or token)
         if code not in known:
             result.errors.append(f"артикула «{token}» нет среди найденных товаров")
+    result.errors += check_facts(reply, context, profile, customer_text, lang)
     return result

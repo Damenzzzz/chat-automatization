@@ -475,7 +475,8 @@ class AgentNodes:
             notes.append(
                 "Прошлый вариант ответа не прошёл проверку: "
                 + "; ".join(state.get("check_errors", []))
-                + ". Перепиши ответ, используя только цены и артикулы из данных выше."
+                + ". Перепиши ответ: цены, артикулы, остатки, телефоны и ссылки бери только"
+                " из данных выше, отвечай на языке покупателя."
             )
         return notes
 
@@ -564,7 +565,12 @@ class AgentNodes:
         async with tenant_session(self.tenant(state)) as session:
             profile = await load_profile(session, self.tenant(state))
         result = check_reply(
-            reply, state.get("context", []), profile, last_human(state), state.get("slots", {})
+            reply,
+            state.get("context", []),
+            profile,
+            last_human(state),
+            state.get("slots", {}),
+            lang=state.get("lang"),
         )
         trace = step(
             state,
