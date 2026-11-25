@@ -36,6 +36,8 @@ class ProductHit:
     ranks: dict[str, int]
     rrf: float
     score: float | None = None
+    description: str | None = None
+    attributes: dict[str, Any] = field(default_factory=dict)
 
     @property
     def in_stock(self) -> bool:

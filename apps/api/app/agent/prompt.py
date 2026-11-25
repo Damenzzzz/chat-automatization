@@ -89,6 +89,8 @@ def system_prompt(profile: ShopProfile) -> str:
         "- Цены, остатки и артикулы бери только из блока «Данные для ответа» и из результатов"
         " инструментов. Никогда не придумывай цену; если её нет — скажи, что уточнишь"
         " у менеджера.",
+        "- Состав, размеры и другие свойства товара называй только по характеристикам и описанию"
+        " из данных. Нужного свойства там нет — скажи, что уточнишь у менеджера.",
         "- Суммы пиши в тенге со знаком ₸, например 24 000 ₸.",
         "- Если остаток 0 — скажи, что товара нет в наличии, и предложи похожий.",
         "- Нужен другой товар или подробности — вызови search_products, get_product или search_kb.",
@@ -120,7 +122,13 @@ def _product_line(item: dict[str, Any]) -> str:
     else:
         availability = "нет в наличии"
     sku = f"{item['sku']} " if item.get("sku") else ""
-    return f"- {sku}«{item['name']}» — {price}, {availability}"
+    line = f"- {sku}«{item['name']}» — {price}, {availability}"
+    for label, key in (("Характеристики", "attributes"), ("Описание", "description")):
+        if item.get(key):
+            line = (line if line.endswith((".", "!", "?", "…")) else line + ".") + (
+                f" {label}: {item[key]}"
+            )
+    return line
 
 
 def context_block(

@@ -78,6 +78,8 @@ def _hit(product: Product, fused: Fused, score: float | None = None) -> ProductH
         ranks=dict(fused.ranks),
         rrf=fused.score,
         score=score,
+        description=product.description,
+        attributes=dict(product.attributes or {}),
     )
 
 

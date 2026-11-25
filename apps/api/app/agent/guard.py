@@ -84,8 +84,11 @@ def allowed_base(
 ) -> set[int]:
     base: set[int] = set()
     for item in context:
-        if item.get("type") == "product" and item.get("price") is not None:
-            base.add(int(item["price"]))
+        if item.get("type") == "product":
+            if item.get("price") is not None:
+                base.add(int(item["price"]))
+            details = f"{item.get('attributes') or ''} {item.get('description') or ''}"
+            base |= numbers(details)
         elif item.get("type") == "lead" and item.get("total_kzt") is not None:
             base.add(int(item["total_kzt"]))
         elif item.get("type") == "kb":

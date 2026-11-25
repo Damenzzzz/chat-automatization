@@ -101,6 +101,24 @@ TOOLS = [
 ]
 
 
+DETAILS_LIMIT = 300
+
+
+def clip(value: str, limit: int = DETAILS_LIMIT) -> str:
+    value = " ".join(value.split())
+    return value if len(value) <= limit else value[: limit - 1].rstrip() + "…"
+
+
+def product_details(description: str | None, attributes: dict[str, Any] | None) -> dict[str, str]:
+    details: dict[str, str] = {}
+    pairs = [f"{k}: {v}" for k, v in (attributes or {}).items() if v not in (None, "")]
+    if pairs:
+        details["attributes"] = clip("; ".join(pairs))
+    if description and description.strip():
+        details["description"] = clip(description)
+    return details
+
+
 def product_item(hit: ProductHit | Product) -> dict[str, Any]:
     return {
         "type": "product",
@@ -111,6 +129,7 @@ def product_item(hit: ProductHit | Product) -> dict[str, Any]:
         "category": hit.category,
         "price": hit.price,
         "stock": hit.stock,
+        **product_details(hit.description, hit.attributes),
     }
 
 
@@ -209,9 +228,7 @@ class ToolBox:
         if product is None:
             return ToolOutcome({"error": f"товар с артикулом {sku} не найден"})
         item = product_item(product)
-        return ToolOutcome(
-            {"product": {**_public(item), "description": product.description}}, [item]
-        )
+        return ToolOutcome({"product": _public(item)}, [item])
 
     async def search_kb(self, query: str) -> ToolOutcome:
         async with tenant_session(self.tenant_id) as session:
