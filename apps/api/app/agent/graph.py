@@ -61,6 +61,10 @@ def after_understand(state: ChatState) -> str:
     return INTENT_ROUTES.get(state.get("intent", ""), "respond")
 
 
+def after_lookup(state: ChatState) -> str:
+    return "kb" if state.get("kb_query") else "respond"
+
+
 def after_respond(state: ChatState) -> str:
     last = state["messages"][-1]
     wants_tool = bool(getattr(last, "tool_calls", None))
@@ -86,7 +90,9 @@ def build_graph(
     g.add_conditional_edges("guard_in", after_guard_in, [END, "gate", "understand"])
     g.add_conditional_edges("gate", after_gate, ["send", "understand"])
     g.add_conditional_edges("understand", after_understand, sorted(set(INTENT_ROUTES.values())))
-    for name in ("retrieve", "kb", "order", "handoff"):
+    for name in ("retrieve", "order"):
+        g.add_conditional_edges(name, after_lookup, ["kb", "respond"])
+    for name in ("kb", "handoff"):
         g.add_edge(name, "respond")
     g.add_conditional_edges("respond", after_respond, ["tools", "guard_out"])
     g.add_edge("tools", "respond")

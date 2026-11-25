@@ -162,6 +162,7 @@ class AgentNodes:
             **fresh,
             "recent_products": [c["id"] for c in recalled],
             "follow_up": False,
+            "kb_query": None,
             "duplicate": None,
             "human_mode": mode == "human" or shop_paused,
             "customer_message_id": str(message.id),
@@ -355,6 +356,7 @@ class AgentNodes:
             "complexity": result.complexity,
             "slots": slots,
             "search_query": result.search_query or text,
+            "kb_query": result.kb_query if result.intent in ("product", "order") else None,
             "follow_up": result.follow_up,
             "usage": usage,
             "trace": step(
@@ -365,6 +367,7 @@ class AgentNodes:
                 intent=result.intent,
                 complexity=result.complexity,
                 follow_up=result.follow_up,
+                kb_query=result.kb_query,
                 slots=slots,
             ),
         }
@@ -396,7 +399,7 @@ class AgentNodes:
         }
 
     async def kb(self, state: ChatState) -> dict[str, Any]:
-        query = state.get("search_query") or last_human(state)
+        query = state.get("kb_query") or state.get("search_query") or last_human(state)
         found = await self.toolbox(state).search_kb(query)
         context = merge_context(list(state.get("context", [])), found.context)
         sources = [c["source"] for c in found.context]
@@ -446,8 +449,12 @@ class AgentNodes:
                     "В каталоге ничего не нашлось. Не выдумывай товары: предложи уточнить запрос"
                     " или позвать менеджера."
                 )
-        if intent == "policy" and not any(c["type"] == "kb" for c in context):
-            notes.append("В базе знаний ответа нет. Не выдумывай: предложи уточнить у менеджера.")
+        asked_kb = intent == "policy" or bool(state.get("kb_query"))
+        if asked_kb and not any(c["type"] == "kb" for c in context):
+            notes.append(
+                "В базе знаний нет ответа на вопрос об условиях магазина. Не выдумывай:"
+                " предложи уточнить у менеджера."
+            )
         if state.get("tool_hops", 0) >= MAX_TOOL_HOPS:
             notes.append("Инструменты больше недоступны: ответь по уже найденным данным.")
         if retry:
@@ -637,6 +644,8 @@ class AgentNodes:
         found = self.found_new(state) or any(c["type"] == "kb" for c in context)
         if state.get("follow_up") and any(c.get("recent") for c in context):
             found = True
+        if state.get("kb_query") and not any(c["type"] == "kb" for c in context):
+            return True
         return state.get("intent") in ("product", "policy") and not found
 
     def billable(self, state: ChatState) -> bool:
