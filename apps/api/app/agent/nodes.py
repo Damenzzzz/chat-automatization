@@ -463,6 +463,12 @@ class AgentNodes:
                 " предложи уточнить у менеджера."
             )
         notes += state.get("search_notes", [])
+        if any(c.get("weak") for c in context):
+            notes.append(
+                "Товары с пометкой [?] поиск нашёл с низкой уверенностью: сверь название и"
+                " описание с запросом. Если это не то, что просили, так и скажи и предложи их"
+                " как альтернативу."
+            )
         if state.get("tool_hops", 0) >= MAX_TOOL_HOPS:
             notes.append("Инструменты больше недоступны: ответь по уже найденным данным.")
         if retry:
@@ -630,7 +636,10 @@ class AgentNodes:
         return {"reply": reply, "trace": trace}
 
     def found_new(self, state: ChatState) -> bool:
-        return any(c["type"] == "product" and not c.get("recent") for c in state.get("context", []))
+        return any(
+            c["type"] == "product" and not c.get("recent") and not c.get("weak")
+            for c in state.get("context", [])
+        )
 
     def remembered(self, state: ChatState) -> list[str]:
         reply = state.get("reply") or ""

@@ -4,10 +4,18 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.core.config import get_settings
 from app.db.session import tenant_session
 from app.search import ProductFilters, search_kb, search_products
 from app.search.lang import detect_lang
 from tests.fake_ml import FakeML, make_shop
+
+
+@pytest.fixture(autouse=True)
+def no_kb_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Оценки FakeML не похожи на реранкер: порог базы знаний здесь не проверяем."""
+    monkeypatch.setattr(get_settings(), "search_kb_min_score", 0.0)
+
 
 KB = [
     {"source": "delivery", "title": "Доставка", "text": "Доставляем по Алматы, доставка 2000 ₸"},

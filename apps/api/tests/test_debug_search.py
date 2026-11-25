@@ -1,5 +1,6 @@
 import uuid
 
+import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy import text
@@ -7,9 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.auth.identity import IdentityIn
 from app.cli import create_admin
+from app.core.config import get_settings
 from app.mlclient import get_ml_client
 from tests.conftest import FakeSender, login, random_phone
 from tests.fake_ml import FakeML, make_shop
+
+
+@pytest.fixture(autouse=True)
+def no_kb_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Оценки FakeML не похожи на реранкер: порог базы знаний здесь не проверяем."""
+    monkeypatch.setattr(get_settings(), "search_kb_min_score", 0.0)
 
 
 async def _shop(engine: AsyncEngine) -> uuid.UUID:

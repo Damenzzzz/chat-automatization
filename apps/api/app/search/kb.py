@@ -54,6 +54,8 @@ async def search_kb(
     ranked = [(f, scores[i] if scores else None) for i, f in enumerate(pool)]
     if scores:
         ranked.sort(key=lambda item: -(item[1] or 0.0))
+    floor = settings.search_kb_min_score
+    ranked = [(f, score) for f, score in ranked if score is None or score >= floor]
     items = [
         KbHit(
             id=f.id,

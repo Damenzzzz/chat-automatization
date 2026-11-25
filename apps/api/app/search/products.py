@@ -66,7 +66,9 @@ async def candidate_lists(
     return lists, exact
 
 
-def _hit(product: Product, fused: Fused, score: float | None = None) -> ProductHit:
+def _hit(
+    product: Product, fused: Fused, score: float | None = None, *, exact: bool = False
+) -> ProductHit:
     return ProductHit(
         id=product.id,
         sku=product.sku,
@@ -80,6 +82,7 @@ def _hit(product: Product, fused: Fused, score: float | None = None) -> ProductH
         score=score,
         description=product.description,
         attributes=dict(product.attributes or {}),
+        exact=exact,
     )
 
 
@@ -139,7 +142,7 @@ async def search_products(
     if scores:
         ranked.sort(key=lambda item: -(item[1] or 0.0))
     ranked.sort(key=lambda item: item[0].id not in exact)
-    hits = [_hit(products[f.id], f, score) for f, score in ranked[:limit]]
+    hits = [_hit(products[f.id], f, score, exact=f.id in exact) for f, score in ranked[:limit]]
     lang = lang or detect_lang(query)
     latency_ms = round((time.perf_counter() - started) * 1000)
     if record:

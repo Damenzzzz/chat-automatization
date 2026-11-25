@@ -131,6 +131,7 @@ def product_item(hit: ProductHit | Product) -> dict[str, Any]:
         "price": hit.price,
         "stock": hit.stock,
         **product_details(hit.description, hit.attributes),
+        **({"weak": True} if isinstance(hit, ProductHit) and hit.weak else {}),
     }
 
 
@@ -250,7 +251,7 @@ class ToolBox:
             if not spare and used.category:
                 spare = await self.find(query, replace(used, in_stock=True, category=None))
             extra = [
-                {**product_item(hit), "alternative": True}
+                {**{k: v for k, v in product_item(hit).items() if k != "weak"}, "alternative": True}
                 for hit in spare
                 if str(hit.id) not in shown and hit.stock != 0
             ][:MAX_ALTERNATIVES]

@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     search_rrf_k: int = 60
     search_rerank_top: int = 20
     search_ef_search: int = 100
+    # Пороги оценки реранкера, подбор — eval/results/2026-11-26-threshold.md.
+    search_weak_score: float = 0.003
+    search_kb_min_score: float = 0.0007
 
     catalog_max_upload_bytes: int = 20 * 1024 * 1024
     catalog_max_rows: int = 50_000
