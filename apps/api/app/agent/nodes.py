@@ -163,6 +163,7 @@ class AgentNodes:
             "recent_products": [c["id"] for c in recalled],
             "follow_up": False,
             "kb_query": None,
+            "search_notes": [],
             "duplicate": None,
             "human_mode": mode == "human" or shop_paused,
             "customer_message_id": str(message.id),
@@ -393,8 +394,14 @@ class AgentNodes:
         skus = [c.get("sku") for c in context if c["type"] == "product"]
         return {
             "context": context,
+            "search_notes": found.notes,
             "trace": step(
-                state, "retrieve", query=query, budget_max=slots.get("budget_max"), found=skus
+                state,
+                "retrieve",
+                query=query,
+                budget_max=slots.get("budget_max"),
+                found=skus,
+                relaxed=found.notes,
             ),
         }
 
@@ -455,6 +462,7 @@ class AgentNodes:
                 "В базе знаний нет ответа на вопрос об условиях магазина. Не выдумывай:"
                 " предложи уточнить у менеджера."
             )
+        notes += state.get("search_notes", [])
         if state.get("tool_hops", 0) >= MAX_TOOL_HOPS:
             notes.append("Инструменты больше недоступны: ответь по уже найденным данным.")
         if retry:

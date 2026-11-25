@@ -1,5 +1,5 @@
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from typing import Any
 
@@ -9,6 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.args import ARGS, MAX_QTY, explain
+from app.agent.prompt import money
 from app.auth.identity import normalize_phone
 from app.catalog.normalize import sku_norm
 from app.core.poke import poke
@@ -171,6 +172,34 @@ class ToolOutcome:
     result: dict[str, Any]
     context: list[dict[str, Any]] = field(default_factory=list)
     human_mode: bool = False
+    notes: list[str] = field(default_factory=list)
+
+
+MAX_ALTERNATIVES = 3
+
+
+def relaxations(filters: ProductFilters) -> list[tuple[ProductFilters, str]]:
+    steps: list[tuple[ProductFilters, str]] = []
+    current = filters
+    if current.category:
+        current = replace(current, category=None)
+        steps.append(
+            (current, f"В категории «{filters.category}» ничего нет: показаны товары из других.")
+        )
+    if current.in_stock:
+        current = replace(current, in_stock=False)
+        steps.append((current, "В наличии ничего подходящего нет: показаны товары под заказ."))
+    if current.price_max is not None:
+        limit = money(current.price_max)
+        current = replace(current, price_max=None)
+        steps.append(
+            (
+                current,
+                f"До {limit} ничего не нашлось: показаны ближайшие варианты дороже."
+                " Прямо скажи покупателю, что они выше его бюджета.",
+            )
+        )
+    return steps
 
 
 def _lead_outcome(lead: Lead, products: list[Product], *, repeated: bool) -> ToolOutcome:
@@ -205,7 +234,39 @@ class ToolBox:
         in_stock: bool | None = None,
         category: str | None = None,
     ) -> ToolOutcome:
-        filters = ProductFilters(price_max=budget_max, in_stock=bool(in_stock), category=category)
+        requested = ProductFilters(price_max=budget_max, in_stock=bool(in_stock), category=category)
+        notes: list[str] = []
+        found = await self.find(query, requested, record=not self.sandbox)
+        used = requested
+        for relaxed, note in relaxations(requested):
+            if found:
+                break
+            found, used = await self.find(query, relaxed), relaxed
+            notes = [note]
+        items = [product_item(hit) for hit in found]
+        if items and all(i["stock"] == 0 for i in items):
+            shown = {i["id"] for i in items}
+            spare = await self.find(query, replace(used, in_stock=True))
+            if not spare and used.category:
+                spare = await self.find(query, replace(used, in_stock=True, category=None))
+            extra = [
+                {**product_item(hit), "alternative": True}
+                for hit in spare
+                if str(hit.id) not in shown and hit.stock != 0
+            ][:MAX_ALTERNATIVES]
+            if extra:
+                items += extra
+                notes.append(
+                    "Найденного нет в наличии: предложи похожие товары в наличии из списка."
+                )
+        result: dict[str, Any] = {"products": [_public(i) for i in items]}
+        if notes:
+            result["note"] = " ".join(notes)
+        return ToolOutcome(result, items, notes=notes)
+
+    async def find(
+        self, query: str, filters: ProductFilters, *, record: bool = False
+    ) -> list[ProductHit]:
         async with tenant_session(self.tenant_id) as session:
             found = await search_products(
                 session,
@@ -214,10 +275,9 @@ class ToolBox:
                 ml=self.ml,
                 lang=self.lang,
                 conversation_id=self.conversation_id,
-                record=not self.sandbox,
+                record=record,
             )
-        items = [product_item(hit) for hit in found.items]
-        return ToolOutcome({"products": [_public(i) for i in items]}, items)
+        return found.items
 
     async def get_product(self, sku: str) -> ToolOutcome:
         code = sku_norm(sku)

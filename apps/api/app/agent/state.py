@@ -26,6 +26,7 @@ class ChatState(TypedDict, total=False):
     search_query: str | None
     kb_query: str | None
     context: list[dict[str, Any]]
+    search_notes: list[str]
     recent_products: list[str]
     follow_up: bool
     tool_hops: int

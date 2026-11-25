@@ -26,7 +26,7 @@ def filter_sql(filters: ProductFilters) -> tuple[str, dict[str, Any]]:
     if filters.in_stock:
         parts.append("(p.stock IS NULL OR p.stock > 0)")
     if filters.category:
-        parts.append("lower(p.category) = lower(:category)")
+        parts.append("strpos(lower(p.category), lower(:category)) > 0")
         params["category"] = filters.category
     return " AND ".join(parts), params
 
@@ -40,7 +40,7 @@ def passes(
         return False
     if filters.in_stock and stock is not None and stock <= 0:
         return False
-    return not (filters.category and (category or "").lower() != filters.category.lower())
+    return not (filters.category and filters.category.lower() not in (category or "").lower())
 
 
 async def enable_iterative_scan(session: AsyncSession, ef_search: int) -> None:

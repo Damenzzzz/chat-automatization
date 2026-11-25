@@ -122,7 +122,8 @@ def _product_line(item: dict[str, Any]) -> str:
     else:
         availability = "нет в наличии"
     sku = f"{item['sku']} " if item.get("sku") else ""
-    line = f"- {sku}«{item['name']}» — {price}, {availability}"
+    mark = " (похожий товар в наличии)" if item.get("alternative") else ""
+    line = f"- {sku}«{item['name']}»{mark} — {price}, {availability}"
     for label, key in (("Характеристики", "attributes"), ("Описание", "description")):
         if item.get(key):
             line = (line if line.endswith((".", "!", "?", "…")) else line + ".") + (
