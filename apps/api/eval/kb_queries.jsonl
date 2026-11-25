@@ -1,0 +1,21 @@
+{"id": 1, "lang": "ru", "query": "сколько стоит доставка", "expected": ["delivery"]}
+{"id": 2, "lang": "ru", "query": "доставляете в Каскелен?", "expected": ["delivery"]}
+{"id": 3, "lang": "ru", "query": "можно оплатить через Kaspi?", "expected": ["payment"]}
+{"id": 4, "lang": "ru", "query": "принимаете наличные?", "expected": ["payment"]}
+{"id": 5, "lang": "ru", "query": "до скольки вы работаете", "expected": ["schedule"]}
+{"id": 6, "lang": "ru", "query": "работаете в воскресенье?", "expected": ["schedule"]}
+{"id": 7, "lang": "ru", "query": "где находится ваш магазин", "expected": ["address"]}
+{"id": 8, "lang": "ru", "query": "можно забрать самовывозом", "expected": ["address", "delivery"]}
+{"id": 9, "lang": "kk", "query": "жеткізу қанша тұрады", "expected": ["delivery"]}
+{"id": 10, "lang": "kk", "query": "Kaspi арқылы төлеуге бола ма", "expected": ["payment"]}
+{"id": 11, "lang": "kk", "query": "қашанға дейін жұмыс істейсіздер", "expected": ["schedule"]}
+{"id": 12, "lang": "kk", "query": "дүкен қай жерде орналасқан", "expected": ["address"]}
+{"id": 13, "lang": "mixed", "query": "доставка Қаскеленге бар ма", "expected": ["delivery"]}
+{"id": 14, "lang": "mixed", "query": "Kaspi Red бар ма оплата", "expected": ["payment"]}
+{"id": 15, "lang": "ru", "query": "можно вернуть букет, если не понравился?", "expected": []}
+{"id": 16, "lang": "ru", "query": "есть скидки для студентов?", "expected": []}
+{"id": 17, "lang": "ru", "query": "у вас есть вакансии флориста?", "expected": []}
+{"id": 18, "lang": "ru", "query": "продаёте франшизу?", "expected": []}
+{"id": 19, "lang": "ru", "query": "работаете с юрлицами по договору?", "expected": ["payment"]}
+{"id": 20, "lang": "kk", "query": "студенттерге жеңілдік бар ма", "expected": []}
+{"id": 21, "lang": "mixed", "query": "вакансия флорист керек па", "expected": []}

@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from app.search.evaluation import aggregate, recall_at, reciprocal_rank, render_report, score
+from app.search.evaluation import (
+    aggregate,
+    recall_at,
+    reciprocal_rank,
+    render_report,
+    score,
+    threshold_rows,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,3 +58,16 @@ def test_eval_queries_cover_demo_catalog() -> None:
     assert Counter(q["lang"] for q in queries) == {"ru": 30, "kk": 15, "mixed": 15}
     assert len({q["id"] for q in queries}) == 60
     assert all(q["expected"] and set(q["expected"]) <= skus for q in queries)
+
+
+@pytest.mark.parametrize(("threshold", "kept", "rejected"), [(0.01, 1.0, 0.5), (0.1, 0.5, 1.0)])
+def test_threshold_rows(threshold: float, kept: float, rejected: float) -> None:
+    rows: list[dict[str, object]] = [
+        {"positive": True, "relevant": 0.5, "top": 0.5},
+        {"positive": True, "relevant": 0.05, "top": 0.05},
+        {"positive": True, "relevant": None, "top": 0.9},
+        {"positive": False, "relevant": None, "top": 0.001},
+        {"positive": False, "relevant": None, "top": 0.05},
+    ]
+    [(t, k, r)] = threshold_rows(rows, [threshold])
+    assert (t, round(k, 3), r) == (threshold, round(kept * 2 / 3, 3), rejected)

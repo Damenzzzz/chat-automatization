@@ -118,3 +118,18 @@ def render_report(
         ] or ["- нет"]
         parts.append("")
     return "\n".join(parts)
+
+
+def threshold_rows(
+    rows: Sequence[dict[str, Any]], grid: Sequence[float]
+) -> list[tuple[float, float, float]]:
+    """Для каждого порога: доля нужных запросов, где ожидаемое не ниже порога,
+    и доля запросов мимо каталога, где всё найденное ниже порога."""
+    positives = [r for r in rows if r["positive"]]
+    negatives = [r for r in rows if not r["positive"]]
+    out = []
+    for t in grid:
+        kept = sum(1 for r in positives if r["relevant"] is not None and r["relevant"] >= t)
+        rejected = sum(1 for r in negatives if r["top"] < t)
+        out.append((t, kept / (len(positives) or 1), rejected / (len(negatives) or 1)))
+    return out
